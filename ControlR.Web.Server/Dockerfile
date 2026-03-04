@@ -25,8 +25,44 @@ COPY ["Libraries/ControlR.Libraries.Signalr.Client/ControlR.Libraries.Signalr.Cl
 COPY ["Libraries/ControlR.Libraries.Viewer.Common/ControlR.Libraries.Viewer.Common.csproj", "Libraries/ControlR.Libraries.Viewer.Common/"]
 COPY ["Libraries/ControlR.Libraries.WebSocketRelay.Client/ControlR.Libraries.WebSocketRelay.Client.csproj", "Libraries/ControlR.Libraries.WebSocketRelay.Client/"]
 COPY ["Libraries/ControlR.Libraries.WebSocketRelay.Common/ControlR.Libraries.WebSocketRelay.Common.csproj", "Libraries/ControlR.Libraries.WebSocketRelay.Common/"]
+COPY ["ControlR.Agent/ControlR.Agent.csproj", "ControlR.Agent/"]
+COPY ["ControlR.Agent.Common/ControlR.Agent.Common.csproj", "ControlR.Agent.Common/"]
+COPY ["Libraries/ControlR.Libraries.DevicesCommon/ControlR.Libraries.DevicesCommon.csproj", "Libraries/ControlR.Libraries.DevicesCommon/"]
+COPY ["Libraries/ControlR.Libraries.Ipc/ControlR.Libraries.Ipc.csproj", "Libraries/ControlR.Libraries.Ipc/"]
+COPY ["Libraries/ControlR.Libraries.NativeInterop.Unix/ControlR.Libraries.NativeInterop.Unix.csproj", "Libraries/ControlR.Libraries.NativeInterop.Unix/"]
+COPY ["Libraries/ControlR.Libraries.NativeInterop.Windows/ControlR.Libraries.NativeInterop.Windows.csproj", "Libraries/ControlR.Libraries.NativeInterop.Windows/"]
 RUN dotnet restore "./ControlR.Web.Server/ControlR.Web.Server.csproj"
+RUN dotnet restore "./ControlR.Agent/ControlR.Agent.csproj"
 COPY . .
+
+# Build agents for each platform and place in wwwroot/downloads
+ARG CURRENT_VERSION
+RUN dotnet publish "./ControlR.Agent/ControlR.Agent.csproj" -c Release -r win-x64 \
+    --self-contained true \
+    -p:PublishSingleFile=true \
+    -p:IncludeAllContentForSelfExtract=true \
+    -p:EnableCompressionInSingleFile=true \
+    -p:Version=$CURRENT_VERSION -p:FileVersion=$CURRENT_VERSION \
+    -o /src/ControlR.Web.Server/wwwroot/downloads/win-x64/
+
+RUN dotnet publish "./ControlR.Agent/ControlR.Agent.csproj" -c Release -r win-x86 \
+    --self-contained true \
+    -p:PublishSingleFile=true \
+    -p:IncludeAllContentForSelfExtract=true \
+    -p:EnableCompressionInSingleFile=true \
+    -p:Version=$CURRENT_VERSION -p:FileVersion=$CURRENT_VERSION \
+    -o /src/ControlR.Web.Server/wwwroot/downloads/win-x86/
+
+RUN dotnet publish "./ControlR.Agent/ControlR.Agent.csproj" -c Release -r linux-x64 \
+    --self-contained true \
+    -p:PublishSingleFile=true \
+    -p:IncludeAllContentForSelfExtract=true \
+    -p:EnableCompressionInSingleFile=true \
+    -p:Version=$CURRENT_VERSION -p:FileVersion=$CURRENT_VERSION \
+    -o /src/ControlR.Web.Server/wwwroot/downloads/linux-x64/
+
+RUN echo "$CURRENT_VERSION" > /src/ControlR.Web.Server/wwwroot/downloads/Version.txt
+
 WORKDIR "/src/ControlR.Web.Server"
 RUN dotnet build "./ControlR.Web.Server.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
