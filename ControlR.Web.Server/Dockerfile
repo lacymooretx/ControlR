@@ -31,12 +31,33 @@ COPY ["Libraries/ControlR.Libraries.DevicesCommon/ControlR.Libraries.DevicesComm
 COPY ["Libraries/ControlR.Libraries.Ipc/ControlR.Libraries.Ipc.csproj", "Libraries/ControlR.Libraries.Ipc/"]
 COPY ["Libraries/ControlR.Libraries.NativeInterop.Unix/ControlR.Libraries.NativeInterop.Unix.csproj", "Libraries/ControlR.Libraries.NativeInterop.Unix/"]
 COPY ["Libraries/ControlR.Libraries.NativeInterop.Windows/ControlR.Libraries.NativeInterop.Windows.csproj", "Libraries/ControlR.Libraries.NativeInterop.Windows/"]
+COPY ["ControlR.DesktopClient/ControlR.DesktopClient.csproj", "ControlR.DesktopClient/"]
+COPY ["ControlR.DesktopClient.Common/ControlR.DesktopClient.Common.csproj", "ControlR.DesktopClient.Common/"]
+COPY ["ControlR.DesktopClient.Windows/ControlR.DesktopClient.Windows.csproj", "ControlR.DesktopClient.Windows/"]
+COPY ["ControlR.DesktopClient.Linux/ControlR.DesktopClient.Linux.csproj", "ControlR.DesktopClient.Linux/"]
+COPY ["ControlR.DesktopClient.Mac/ControlR.DesktopClient.Mac.csproj", "ControlR.DesktopClient.Mac/"]
+COPY ["Libraries/ControlR.Libraries.Branding/ControlR.Libraries.Branding.csproj", "Libraries/ControlR.Libraries.Branding/"]
+COPY ["Libraries/ControlR.Libraries.Hosting/ControlR.Libraries.Hosting.csproj", "Libraries/ControlR.Libraries.Hosting/"]
 RUN dotnet restore "./ControlR.Web.Server/ControlR.Web.Server.csproj"
 RUN dotnet restore "./ControlR.Agent/ControlR.Agent.csproj"
+RUN dotnet restore "./ControlR.DesktopClient/ControlR.DesktopClient.csproj"
 COPY . .
 
-# Build agents for each platform and place in wwwroot/downloads
+# Build DesktopClient for Windows, zip it, and embed in Agent resources
 ARG CURRENT_VERSION
+RUN dotnet publish "./ControlR.DesktopClient/ControlR.DesktopClient.csproj" -c Release -r win-x64 \
+    --self-contained true \
+    -p:PublishSingleFile=true \
+    -p:IncludeAllContentForSelfExtract=true \
+    -p:EnableCompressionInSingleFile=true \
+    -p:Version=$CURRENT_VERSION -p:FileVersion=$CURRENT_VERSION \
+    -o /tmp/desktopclient-win-x64/ \
+    && cd /tmp/desktopclient-win-x64 \
+    && apt-get update && apt-get install -y --no-install-recommends zip \
+    && zip -r /src/ControlR.Agent.Common/Resources/ControlR.DesktopClient.zip . \
+    && rm -rf /tmp/desktopclient-win-x64
+
+# Build agents for each platform with embedded DesktopClient
 RUN dotnet publish "./ControlR.Agent/ControlR.Agent.csproj" -c Release -r win-x64 \
     --self-contained true \
     -p:PublishSingleFile=true \
