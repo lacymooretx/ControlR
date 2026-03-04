@@ -48,6 +48,16 @@ namespace ControlR.ApiClient.Models
 #else
         public List<string> CurrentUsers { get; set; }
 #endif
+        /// <summary>The deviceGroupId property</summary>
+        public Guid? DeviceGroupId { get; set; }
+        /// <summary>The deviceGroupName property</summary>
+#if NETSTANDARD2_1_OR_GREATER || NETCOREAPP3_1_OR_GREATER
+#nullable enable
+        public string? DeviceGroupName { get; set; }
+#nullable restore
+#else
+        public string DeviceGroupName { get; set; }
+#endif
         /// <summary>The drives property</summary>
 #if NETSTANDARD2_1_OR_GREATER || NETCOREAPP3_1_OR_GREATER
 #nullable enable
@@ -176,6 +186,8 @@ namespace ControlR.ApiClient.Models
                 { "connectionId", n => { ConnectionId = n.GetStringValue(); } },
                 { "cpuUtilization", n => { CpuUtilization = n.GetDoubleValue(); } },
                 { "currentUsers", n => { CurrentUsers = n.GetCollectionOfPrimitiveValues<string>()?.AsList(); } },
+                { "deviceGroupId", n => { DeviceGroupId = n.GetGuidValue(); } },
+                { "deviceGroupName", n => { DeviceGroupName = n.GetStringValue(); } },
                 { "drives", n => { Drives = n.GetCollectionOfObjectValues<global::ControlR.ApiClient.Models.Drive>(global::ControlR.ApiClient.Models.Drive.CreateFromDiscriminatorValue)?.AsList(); } },
                 { "id", n => { Id = n.GetGuidValue(); } },
                 { "is64Bit", n => { Is64Bit = n.GetBoolValue(); } },
@@ -212,6 +224,8 @@ namespace ControlR.ApiClient.Models
             writer.WriteStringValue("connectionId", ConnectionId);
             writer.WriteDoubleValue("cpuUtilization", CpuUtilization);
             writer.WriteCollectionOfPrimitiveValues<string>("currentUsers", CurrentUsers);
+            writer.WriteGuidValue("deviceGroupId", DeviceGroupId);
+            writer.WriteStringValue("deviceGroupName", DeviceGroupName);
             writer.WriteCollectionOfObjectValues<global::ControlR.ApiClient.Models.Drive>("drives", Drives);
             writer.WriteGuidValue("id", Id);
             writer.WriteBoolValue("is64Bit", Is64Bit);
