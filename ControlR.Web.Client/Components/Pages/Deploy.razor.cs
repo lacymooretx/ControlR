@@ -94,8 +94,8 @@ public partial class Deploy
     get
     {
       var downloadUri = new Uri(GetServerUri(), "/downloads/win-x64/ControlR.Agent.exe");
-      return $"Invoke-WebRequest -Uri \"{downloadUri}\" -OutFile \"$env:TEMP/ControlR.Agent.exe\" -UseBasicParsing; " +
-             $"Start-Process -FilePath \"$env:TEMP/ControlR.Agent.exe\" -ArgumentList \"install {GetCommonArgs()}\" -Verb RunAs;";
+      return $"(New-Object Net.WebClient).DownloadFile(\"{downloadUri}\", \"$env:TEMP\\ControlR.Agent.exe\"); " +
+             $"Start-Process -FilePath \"$env:TEMP\\ControlR.Agent.exe\" -ArgumentList \"install {GetCommonArgs()}\" -Verb RunAs;";
     }
   }
   private string WindowsX86DeployScript
@@ -103,8 +103,8 @@ public partial class Deploy
     get
     {
       var downloadUri = new Uri(GetServerUri(), "/downloads/win-x86/ControlR.Agent.exe");
-      return $"Invoke-WebRequest -Uri \"{downloadUri}\" -OutFile \"$env:TEMP/ControlR.Agent.exe\" -UseBasicParsing; " +
-             $"Start-Process -FilePath \"$env:TEMP/ControlR.Agent.exe\" -ArgumentList \"install {GetCommonArgs()}\" -Verb RunAs;";
+      return $"(New-Object Net.WebClient).DownloadFile(\"{downloadUri}\", \"$env:TEMP\\ControlR.Agent.exe\"); " +
+             $"Start-Process -FilePath \"$env:TEMP\\ControlR.Agent.exe\" -ArgumentList \"install {GetCommonArgs()}\" -Verb RunAs;";
     }
   }
 
