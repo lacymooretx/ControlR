@@ -127,10 +127,35 @@
             RedirectManager.RedirectTo("Account/Lockout");
         }
 
+        // Check if an existing user has this email and auto-link the external login
+        var email = _externalLoginInfo.Principal.FindFirstValue(ClaimTypes.Email)
+            ?? _externalLoginInfo.Principal.FindFirstValue("email");
+        if (!string.IsNullOrEmpty(email))
+        {
+            var existingUser = await UserManager.FindByEmailAsync(email);
+            if (existingUser is not null)
+            {
+                var addLoginResult = await UserManager.AddLoginAsync(existingUser, _externalLoginInfo);
+                if (addLoginResult.Succeeded)
+                {
+                    Logger.LogInformation(
+                        "Linked {LoginProvider} to existing user {Email}.",
+                        _externalLoginInfo.LoginProvider,
+                        email);
+                    await SignInManager.SignInAsync(existingUser, false, _externalLoginInfo.LoginProvider);
+                    RedirectManager.RedirectTo(ReturnUrl);
+                    return;
+                }
+
+                _message = $"Error: {string.Join(",", addLoginResult.Errors.Select(e => e.Description))}";
+                return;
+            }
+        }
+
         // If the user does not have an account, then ask the user to create an account.
         if (_externalLoginInfo.Principal.HasClaim(c => c.Type == ClaimTypes.Email))
         {
-            Input.Email = _externalLoginInfo.Principal.FindFirstValue(ClaimTypes.Email) ?? "";
+            Input.Email = email ?? "";
         }
     }
 
