@@ -14,12 +14,17 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 COPY ["Directory.Build.props", "."]
+COPY ["Directory.Packages.props", "."]
 COPY ["ControlR.Web.Server/ControlR.Web.Server.csproj", "ControlR.Web.Server/"]
 COPY ["ControlR.Web.Client/ControlR.Web.Client.csproj", "ControlR.Web.Client/"]
-COPY ["Libraries/ControlR.Libraries.Clients/ControlR.Libraries.Clients.csproj", "Libraries/ControlR.Libraries.Clients/"]
+COPY ["ControlR.Web.ServiceDefaults/ControlR.Web.ServiceDefaults.csproj", "ControlR.Web.ServiceDefaults/"]
+COPY ["Libraries/ControlR.Libraries.DataRedaction/ControlR.Libraries.DataRedaction.csproj", "Libraries/ControlR.Libraries.DataRedaction/"]
+COPY ["Libraries/ControlR.Libraries.Messenger.Extensions/ControlR.Libraries.Messenger.Extensions.csproj", "Libraries/ControlR.Libraries.Messenger.Extensions/"]
 COPY ["Libraries/ControlR.Libraries.Shared/ControlR.Libraries.Shared.csproj", "Libraries/ControlR.Libraries.Shared/"]
 COPY ["Libraries/ControlR.Libraries.Signalr.Client/ControlR.Libraries.Signalr.Client.csproj", "Libraries/ControlR.Libraries.Signalr.Client/"]
-COPY ["ControlR.Web.ServiceDefaults/ControlR.Web.ServiceDefaults.csproj", "ControlR.Web.ServiceDefaults/"]
+COPY ["Libraries/ControlR.Libraries.Viewer.Common/ControlR.Libraries.Viewer.Common.csproj", "Libraries/ControlR.Libraries.Viewer.Common/"]
+COPY ["Libraries/ControlR.Libraries.WebSocketRelay.Client/ControlR.Libraries.WebSocketRelay.Client.csproj", "Libraries/ControlR.Libraries.WebSocketRelay.Client/"]
+COPY ["Libraries/ControlR.Libraries.WebSocketRelay.Common/ControlR.Libraries.WebSocketRelay.Common.csproj", "Libraries/ControlR.Libraries.WebSocketRelay.Common/"]
 RUN dotnet restore "./ControlR.Web.Server/ControlR.Web.Server.csproj"
 COPY . .
 WORKDIR "/src/ControlR.Web.Server"
