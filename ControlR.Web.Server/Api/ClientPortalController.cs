@@ -45,7 +45,7 @@ public class ClientPortalController : ControllerBase
     return Ok(await ToDto(appDb, assignment));
   }
 
-  [HttpGet("assignments/{userId:guid}")]
+  [HttpGet("assignments/by-user/{userId:guid}")]
   [Authorize(Roles = RoleNames.TenantAdministrator)]
   public async Task<ActionResult<ClientDeviceAssignmentDto[]>> GetAssignments(
     [FromServices] AppDb appDb,

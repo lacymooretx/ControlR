@@ -560,7 +560,7 @@ public class ControlrApi(
   {
     return await TryCallApi(async () =>
       await _client.GetFromJsonAsync<ClientDeviceAssignmentDto[]>(
-        $"{HttpConstants.ClientPortalEndpoint}/assignments/{userId}"));
+        $"{HttpConstants.ClientPortalEndpoint}/assignments/by-user/{userId}"));
   }
 
   public async Task<Result<DeviceResponseDto[]>> GetClientDevices()
