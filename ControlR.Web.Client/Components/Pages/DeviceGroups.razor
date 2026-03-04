@@ -1,0 +1,154 @@
+@page "/device-groups"
+@attribute [Authorize(Roles = RoleNames.TenantAdministrator)]
+@inject IControlrApi ControlrApi
+@inject IDeviceGroupStore DeviceGroupStore
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudText Typo="Typo.h4" Color="Color.Primary" GutterBottom>
+  Device Groups
+</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+  <MudStack Row AlignItems="AlignItems.Center">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+      StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+      New Group
+    </MudButton>
+    <MudSpacer />
+    <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Info"
+      OnClick="RefreshGroups" />
+  </MudStack>
+</MudPaper>
+
+@if (_loading)
+{
+  <MudProgressLinear Indeterminate Color="Color.Primary" />
+}
+else if (_groups.Count == 0)
+{
+  <MudAlert Severity="Severity.Info">
+    No device groups created yet. Click "New Group" to get started.
+  </MudAlert>
+}
+else
+{
+  <MudDataGrid T="DeviceGroupDto" Items="_groups" SortMode="SortMode.Single"
+    Filterable="false" Hideable="false">
+    <Columns>
+      <PropertyColumn Property="x => x.Name" Title="Name" />
+      <PropertyColumn Property="x => x.GroupType" Title="Type" />
+      <PropertyColumn Property="x => x.Description" Title="Description" />
+      <TemplateColumn T="DeviceGroupDto" Title="Parent" Sortable="false">
+        <CellTemplate>
+          @GetParentName(context.Item.ParentGroupId)
+        </CellTemplate>
+      </TemplateColumn>
+      <PropertyColumn Property="x => x.DeviceIds.Count" Title="Devices" />
+      <PropertyColumn Property="x => x.SortOrder" Title="Order" />
+      <TemplateColumn T="DeviceGroupDto" Title="Actions" Sortable="false">
+        <CellTemplate>
+          <MudStack Row>
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary"
+              Size="Size.Small" OnClick="@(() => OpenEditDialog(context.Item))" />
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+              Size="Size.Small" OnClick="@(() => DeleteGroup(context.Item))" />
+          </MudStack>
+        </CellTemplate>
+      </TemplateColumn>
+    </Columns>
+  </MudDataGrid>
+}
+
+@code {
+  private List<DeviceGroupDto> _groups = [];
+  private bool _loading = true;
+
+  protected override async Task OnInitializedAsync()
+  {
+    await RefreshGroups();
+  }
+
+  private string GetParentName(Guid? parentGroupId)
+  {
+    if (parentGroupId is null)
+    {
+      return "(Root)";
+    }
+
+    var parent = _groups.FirstOrDefault(g => g.Id == parentGroupId);
+    return parent?.Name ?? "(Unknown)";
+  }
+
+  private async Task RefreshGroups()
+  {
+    _loading = true;
+    StateHasChanged();
+
+    await DeviceGroupStore.Refresh();
+    _groups = DeviceGroupStore.Items
+      .OrderBy(x => x.SortOrder)
+      .ThenBy(x => x.Name)
+      .ToList();
+
+    _loading = false;
+    StateHasChanged();
+  }
+
+  private async Task OpenCreateDialog()
+  {
+    var parameters = new DialogParameters<DeviceGroupEditDialog>
+    {
+      { x => x.ExistingGroups, _groups },
+    };
+
+    var dialog = await DialogService.ShowAsync<DeviceGroupEditDialog>("New Device Group", parameters);
+    var result = await dialog.Result;
+
+    if (result is { Canceled: false })
+    {
+      await RefreshGroups();
+    }
+  }
+
+  private async Task OpenEditDialog(DeviceGroupDto group)
+  {
+    var parameters = new DialogParameters<DeviceGroupEditDialog>
+    {
+      { x => x.ExistingGroup, group },
+      { x => x.ExistingGroups, _groups },
+    };
+
+    var dialog = await DialogService.ShowAsync<DeviceGroupEditDialog>("Edit Device Group", parameters);
+    var result = await dialog.Result;
+
+    if (result is { Canceled: false })
+    {
+      await RefreshGroups();
+    }
+  }
+
+  private async Task DeleteGroup(DeviceGroupDto group)
+  {
+    var confirmed = await DialogService.ShowMessageBox(
+      "Delete Device Group",
+      $"Are you sure you want to delete '{group.Name}'? Devices in this group will be unassigned.",
+      yesText: "Delete",
+      cancelText: "Cancel");
+
+    if (confirmed != true)
+    {
+      return;
+    }
+
+    var deleteResult = await ControlrApi.DeleteDeviceGroup(group.Id);
+    if (!deleteResult.IsSuccess)
+    {
+      Snackbar.Add(deleteResult.Reason, Severity.Error);
+      return;
+    }
+
+    Snackbar.Add("Device group deleted", Severity.Success);
+    await RefreshGroups();
+  }
+}

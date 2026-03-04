@@ -1,0 +1,123 @@
+@inject ISnackbar Snackbar
+
+<MudDialog>
+  <DialogContent>
+    <MudText Typo="Typo.subtitle1" GutterBottom>
+      Wake device: @Device.Name
+    </MudText>
+
+    @if (Device.MacAddresses.Length == 0)
+    {
+      <MudAlert Severity="Severity.Warning">
+        No MAC addresses found for this device. Wake-on-LAN requires at least one MAC address.
+      </MudAlert>
+    }
+    else
+    {
+      <MudText Typo="Typo.body2" Class="mb-2">
+        A magic packet will be broadcast to all agents sharing tags with this device.
+        Only agents on the same network can wake the target.
+      </MudText>
+
+      <MudText Typo="Typo.subtitle2" Class="mt-3 mb-1">Target MAC Addresses</MudText>
+      <MudPaper Class="pa-2" Outlined>
+        @foreach (var mac in Device.MacAddresses)
+        {
+          <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Info" Class="ma-1">
+            @FormatMac(mac)
+          </MudChip>
+        }
+      </MudPaper>
+
+      @if (!string.IsNullOrEmpty(Device.LocalIpV4))
+      {
+        <MudText Typo="Typo.subtitle2" Class="mt-3 mb-1">Network Info</MudText>
+        <MudSimpleTable Dense>
+          <tbody>
+            @if (!string.IsNullOrEmpty(Device.LocalIpV4))
+            {
+              <tr>
+                <td><strong>Local IPv4</strong></td>
+                <td>@Device.LocalIpV4</td>
+              </tr>
+            }
+            @if (!string.IsNullOrEmpty(Device.PublicIpV4))
+            {
+              <tr>
+                <td><strong>Public IPv4</strong></td>
+                <td>@Device.PublicIpV4</td>
+              </tr>
+            }
+          </tbody>
+        </MudSimpleTable>
+      }
+
+      @if (_sent)
+      {
+        <MudAlert Severity="Severity.Success" Class="mt-3">
+          Wake command sent. The device may take a moment to respond.
+        </MudAlert>
+      }
+    }
+  </DialogContent>
+  <DialogActions>
+    <MudButton OnClick="Cancel">Close</MudButton>
+    @if (Device.MacAddresses.Length > 0 && !_sent)
+    {
+      <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SendWake"
+        Disabled="_sending" StartIcon="@Icons.Material.Filled.PowerSettingsNew">
+        @if (_sending)
+        {
+          <MudProgressCircular Indeterminate Size="Size.Small" Class="mr-2" />
+        }
+        Send Wake
+      </MudButton>
+    }
+  </DialogActions>
+</MudDialog>
+
+@code {
+  [CascadingParameter]
+  private IMudDialogInstance MudDialog { get; set; } = null!;
+
+  [Parameter]
+  public required DeviceResponseDto Device { get; set; }
+
+  [Parameter]
+  public Func<Guid, string[], Task>? OnWake { get; set; }
+
+  private bool _sending;
+  private bool _sent;
+
+  private static string FormatMac(string mac)
+  {
+    if (mac.Length == 12)
+    {
+      return string.Join(":", Enumerable.Range(0, 6).Select(i => mac.Substring(i * 2, 2)));
+    }
+    return mac;
+  }
+
+  private void Cancel() => MudDialog.Close();
+
+  private async Task SendWake()
+  {
+    _sending = true;
+
+    try
+    {
+      if (OnWake is not null)
+      {
+        await OnWake(Device.Id, Device.MacAddresses);
+      }
+      _sent = true;
+      Snackbar.Add("Wake-on-LAN command sent", Severity.Success);
+    }
+    catch (Exception)
+    {
+      Snackbar.Add("Failed to send wake command", Severity.Error);
+    }
+
+    _sending = false;
+  }
+}

@@ -1,0 +1,201 @@
+@inject IControlrApi ControlrApi
+@inject ISnackbar Snackbar
+@inject IDeviceStore DeviceStore
+
+<MudDialog>
+  <DialogContent>
+    <MudTextField @bind-Value="_name" Label="Name" Required />
+
+    <MudSelect T="string" @bind-Value="_metricType" Label="Metric Type" Class="mt-2" Required>
+      <MudSelectItem Value="@("CPU")">CPU Usage</MudSelectItem>
+      <MudSelectItem Value="@("Memory")">Memory Usage</MudSelectItem>
+      <MudSelectItem Value="@("Disk")">Disk Usage</MudSelectItem>
+    </MudSelect>
+
+    <MudStack Row Class="mt-2">
+      <MudSelect T="string" @bind-Value="_operator" Label="Operator" Required Style="max-width: 150px;">
+        <MudSelectItem Value="@(">")">Greater than</MudSelectItem>
+        <MudSelectItem Value="@(">=")">Greater or equal</MudSelectItem>
+        <MudSelectItem Value="@("<")">Less than</MudSelectItem>
+        <MudSelectItem Value="@("<=")">Less or equal</MudSelectItem>
+      </MudSelect>
+      <MudNumericField T="double" @bind-Value="_thresholdValue" Label="Threshold (%)"
+        Min="0" Max="100" Required />
+    </MudStack>
+
+    <MudTextField @bind-Value="_duration" Label="Duration (minutes)" Class="mt-2"
+      HelperText="How long the condition must persist before alerting (0 = immediate)" />
+
+    <MudTextField @bind-Value="_notificationRecipients" Label="Notification Recipients" Class="mt-2"
+      HelperText="Comma-separated email addresses (optional)" />
+
+    <MudText Typo="Typo.subtitle2" Class="mt-4 mb-2">Target Devices</MudText>
+    <MudTextField @bind-Value="_deviceFilter" Label="Filter devices" Adornment="Adornment.Start"
+      AdornmentIcon="@Icons.Material.Filled.Search" Immediate DebounceInterval="300" Class="mb-2" />
+
+    <MudPaper Style="max-height: 200px; overflow-y: auto;" Class="pa-2">
+      @foreach (var device in FilteredDevices)
+      {
+        <MudCheckBox T="bool" Value="@_selectedDeviceIds.Contains(device.Id)"
+          ValueChanged="@(v => ToggleDevice(device.Id, v))"
+          Label="@device.Name"
+          Color="Color.Primary" Dense />
+      }
+    </MudPaper>
+
+    @if (_deviceGroups.Count > 0)
+    {
+      <MudText Typo="Typo.subtitle2" Class="mt-4 mb-2">Target Groups</MudText>
+      <MudPaper Style="max-height: 150px; overflow-y: auto;" Class="pa-2">
+        @foreach (var group in _deviceGroups)
+        {
+          <MudCheckBox T="bool" Value="@_selectedGroupIds.Contains(group.Id)"
+            ValueChanged="@(v => ToggleGroup(group.Id, v))"
+            Label="@group.Name"
+            Color="Color.Primary" Dense />
+        }
+      </MudPaper>
+    }
+
+    <MudText Typo="Typo.caption" Class="mt-2" Color="Color.Info">
+      Leave targets empty to apply rule to all devices in the tenant.
+    </MudText>
+
+    @if (Rule is not null)
+    {
+      <MudSwitch T="bool" @bind-Value="_isEnabled" Label="Enabled" Color="Color.Success" Class="mt-3" />
+    }
+  </DialogContent>
+  <DialogActions>
+    <MudButton OnClick="Cancel">Cancel</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save"
+      Disabled="@(_saving || string.IsNullOrWhiteSpace(_name) || string.IsNullOrWhiteSpace(_metricType))">
+      @if (_saving)
+      {
+        <MudProgressCircular Indeterminate Size="Size.Small" Class="mr-2" />
+      }
+      Save
+    </MudButton>
+  </DialogActions>
+</MudDialog>
+
+@code {
+  [CascadingParameter]
+  private IMudDialogInstance MudDialog { get; set; } = null!;
+
+  [Parameter]
+  public AlertRuleDto? Rule { get; set; }
+
+  private string _name = string.Empty;
+  private string _metricType = "CPU";
+  private double _thresholdValue = 90;
+  private string _operator = ">";
+  private string _duration = "0";
+  private bool _isEnabled = true;
+  private bool _saving;
+  private string _deviceFilter = string.Empty;
+  private string _notificationRecipients = string.Empty;
+
+  private HashSet<Guid> _selectedDeviceIds = [];
+  private HashSet<Guid> _selectedGroupIds = [];
+  private List<DeviceGroupDto> _deviceGroups = [];
+
+  private IEnumerable<DeviceResponseDto> FilteredDevices =>
+    DeviceStore.Items
+      .Where(d => string.IsNullOrWhiteSpace(_deviceFilter) ||
+                  d.Name.Contains(_deviceFilter, StringComparison.OrdinalIgnoreCase))
+      .OrderBy(d => d.Name);
+
+  protected override async Task OnInitializedAsync()
+  {
+    var groupsResult = await ControlrApi.GetAllDeviceGroups();
+    if (groupsResult.IsSuccess)
+    {
+      _deviceGroups = groupsResult.Value.ToList();
+    }
+
+    await DeviceStore.Refresh();
+
+    if (Rule is not null)
+    {
+      _name = Rule.Name;
+      _metricType = Rule.MetricType;
+      _thresholdValue = Rule.ThresholdValue;
+      _operator = Rule.Operator;
+      _duration = Rule.Duration;
+      _isEnabled = Rule.IsEnabled;
+      _notificationRecipients = Rule.NotificationRecipients;
+      _selectedDeviceIds = new HashSet<Guid>(Rule.TargetDeviceIds);
+      _selectedGroupIds = new HashSet<Guid>(Rule.TargetGroupIds);
+    }
+  }
+
+  private void ToggleDevice(Guid deviceId, bool selected)
+  {
+    if (selected) _selectedDeviceIds.Add(deviceId);
+    else _selectedDeviceIds.Remove(deviceId);
+  }
+
+  private void ToggleGroup(Guid groupId, bool selected)
+  {
+    if (selected) _selectedGroupIds.Add(groupId);
+    else _selectedGroupIds.Remove(groupId);
+  }
+
+  private void Cancel() => MudDialog.Cancel();
+
+  private async Task Save()
+  {
+    _saving = true;
+
+    if (Rule is null)
+    {
+      var request = new AlertRuleCreateRequestDto(
+        _name,
+        _metricType,
+        _thresholdValue,
+        _operator,
+        _duration,
+        _selectedDeviceIds.ToList().AsReadOnly(),
+        _selectedGroupIds.ToList().AsReadOnly(),
+        _notificationRecipients);
+
+      var result = await ControlrApi.CreateAlertRule(request);
+      if (!result.IsSuccess)
+      {
+        Snackbar.Add(result.Reason, Severity.Error);
+        _saving = false;
+        return;
+      }
+
+      Snackbar.Add("Alert rule created", Severity.Success);
+    }
+    else
+    {
+      var request = new AlertRuleUpdateRequestDto(
+        Rule.Id,
+        _name,
+        _metricType,
+        _thresholdValue,
+        _operator,
+        _duration,
+        _isEnabled,
+        _selectedDeviceIds.ToList().AsReadOnly(),
+        _selectedGroupIds.ToList().AsReadOnly(),
+        _notificationRecipients);
+
+      var result = await ControlrApi.UpdateAlertRule(request);
+      if (!result.IsSuccess)
+      {
+        Snackbar.Add(result.Reason, Severity.Error);
+        _saving = false;
+        return;
+      }
+
+      Snackbar.Add("Alert rule updated", Severity.Success);
+    }
+
+    _saving = false;
+    MudDialog.Close(DialogResult.Ok(true));
+  }
+}

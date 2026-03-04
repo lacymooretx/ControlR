@@ -1,0 +1,152 @@
+@attribute [Route(ClientRoutes.AuditLog)]
+@attribute [Authorize(Roles = RoleNames.TenantAdministrator)]
+@inject IControlrApi ControlrApi
+@inject ISnackbar Snackbar
+@inject ILogger<AuditLog> Logger
+
+<PageTitle>Audit Log</PageTitle>
+
+<PrimaryTitle>
+  Audit Log
+</PrimaryTitle>
+
+<MudCard Class="mb-4">
+  <MudCardContent>
+    <MudGrid>
+      <MudItem xs="12" sm="3">
+        <MudDatePicker @bind-Date="_startDate" Label="Start Date" Clearable="true" />
+      </MudItem>
+      <MudItem xs="12" sm="3">
+        <MudDatePicker @bind-Date="_endDate" Label="End Date" Clearable="true" />
+      </MudItem>
+      <MudItem xs="12" sm="3">
+        <MudSelect T="string" @bind-Value="_selectedEventType" Label="Event Type" Clearable="true">
+          <MudSelectItem Value="@("")">All</MudSelectItem>
+          <MudSelectItem Value="@("RemoteControl")">Remote Control</MudSelectItem>
+          <MudSelectItem Value="@("Terminal")">Terminal</MudSelectItem>
+          <MudSelectItem Value="@("FileTransfer")">File Transfer</MudSelectItem>
+          <MudSelectItem Value="@("PowerState")">Power State</MudSelectItem>
+          <MudSelectItem Value="@("WakeDevice")">Wake Device</MudSelectItem>
+          <MudSelectItem Value="@("UninstallAgent")">Uninstall Agent</MudSelectItem>
+          <MudSelectItem Value="@("Chat")">Chat</MudSelectItem>
+          <MudSelectItem Value="@("Login")">Login</MudSelectItem>
+          <MudSelectItem Value="@("LoginFailed")">Login Failed</MudSelectItem>
+          <MudSelectItem Value="@("Logout")">Logout</MudSelectItem>
+          <MudSelectItem Value="@("AgentUpdate")">Agent Update</MudSelectItem>
+        </MudSelect>
+      </MudItem>
+      <MudItem xs="12" sm="3" Class="d-flex align-end gap-2">
+        <MudButton Color="Color.Primary" Variant="Variant.Outlined" OnClick="Search" Disabled="_isLoading">
+          Search
+        </MudButton>
+        <MudButton Color="Color.Secondary" Variant="Variant.Text" OnClick="ExportCsv" Disabled="_isLoading">
+          Export CSV
+        </MudButton>
+      </MudItem>
+    </MudGrid>
+  </MudCardContent>
+</MudCard>
+
+<MudDataGrid T="AuditLogDto" Items="@_auditLogs" Loading="_isLoading" SortMode="SortMode.Single" Filterable="true"
+  Dense="true">
+  <Columns>
+    <PropertyColumn Property="x => x.Timestamp" Title="Time" Format="yyyy-MM-dd HH:mm:ss" />
+    <PropertyColumn Property="x => x.EventType" Title="Event" />
+    <PropertyColumn Property="x => x.Action" Title="Action" />
+    <PropertyColumn Property="x => x.ActorUserName" Title="User" />
+    <PropertyColumn Property="x => x.TargetDeviceName" Title="Device" />
+    <PropertyColumn Property="x => x.SourceIpAddress" Title="Source IP" />
+    <PropertyColumn Property="x => x.Details" Title="Details">
+      <CellTemplate>
+        @if (!string.IsNullOrWhiteSpace(context.Item.Details))
+        {
+          <MudTooltip Text="@context.Item.Details">
+            <MudText Typo="Typo.body2" Style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              @context.Item.Details
+            </MudText>
+          </MudTooltip>
+        }
+      </CellTemplate>
+    </PropertyColumn>
+  </Columns>
+  <PagerContent>
+    <MudDataGridPager T="AuditLogDto" />
+  </PagerContent>
+</MudDataGrid>
+
+@if (_totalCount > 0)
+{
+  <MudText Typo="Typo.caption" Class="mt-2">
+    Showing @_auditLogs.Count of @_totalCount total entries
+  </MudText>
+}
+
+@code {
+  private readonly List<AuditLogDto> _auditLogs = [];
+  private bool _isLoading;
+  private DateTime? _startDate;
+  private DateTime? _endDate;
+  private string? _selectedEventType;
+  private int _totalCount;
+
+  protected override async Task OnInitializedAsync()
+  {
+    await base.OnInitializedAsync();
+    await Search();
+  }
+
+  private async Task Search()
+  {
+    try
+    {
+      _isLoading = true;
+
+      var request = new AuditLogSearchRequestDto(
+        StartDate: _startDate.HasValue ? new DateTimeOffset(_startDate.Value, TimeSpan.Zero) : null,
+        EndDate: _endDate.HasValue ? new DateTimeOffset(_endDate.Value.AddDays(1), TimeSpan.Zero) : null,
+        EventType: string.IsNullOrWhiteSpace(_selectedEventType) ? null : _selectedEventType,
+        ActorUserName: null,
+        TargetDeviceId: null,
+        SearchText: null,
+        Skip: 0,
+        Take: 500);
+
+      var result = await ControlrApi.SearchAuditLogs(request);
+      if (result.IsSuccess && result.Value is not null)
+      {
+        _auditLogs.Clear();
+        _auditLogs.AddRange(result.Value.Items);
+        _totalCount = result.Value.TotalCount;
+      }
+      else
+      {
+        Snackbar.Add("Failed to load audit logs.", Severity.Error);
+      }
+    }
+    catch (Exception ex)
+    {
+      Logger.LogError(ex, "Error loading audit logs.");
+      Snackbar.Add("An error occurred while loading audit logs.", Severity.Error);
+    }
+    finally
+    {
+      _isLoading = false;
+    }
+  }
+
+  private async Task ExportCsv()
+  {
+    try
+    {
+      var startParam = _startDate.HasValue ? $"&startDate={_startDate.Value:O}" : "";
+      var endParam = _endDate.HasValue ? $"&endDate={_endDate.Value.AddDays(1):O}" : "";
+      var url = $"/api/audit-logs/export?{startParam}{endParam}".TrimStart('&');
+      Snackbar.Add("CSV export initiated. Check your downloads.", Severity.Info);
+    }
+    catch (Exception ex)
+    {
+      Logger.LogError(ex, "Error exporting audit logs.");
+      Snackbar.Add("Failed to export audit logs.", Severity.Error);
+    }
+  }
+}

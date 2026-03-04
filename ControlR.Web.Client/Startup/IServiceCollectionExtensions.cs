@@ -51,6 +51,7 @@ public static class ServiceCollectionExtensions
     services.AddTransient<IJsInterop, JsInterop>();
     services.AddTransient<IHubConnectionBuilder, HubConnectionBuilder>();
 
+    services.AddScoped<IDeviceGroupStore, DeviceGroupStore>();
     services.AddScoped<IDeviceStore, DeviceStore>();
     services.AddScoped<IUserTagStore, UserTagStore>();
     services.AddScoped<IAdminTagStore, AdminTagStore>();

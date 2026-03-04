@@ -170,7 +170,8 @@
         </CellTemplate>
       </PropertyColumn>
 
-      <PropertyColumn Property="x => x.Dto.CurrentUsers" Title="Current Users" Sortable="false" Filterable="false">
+      <PropertyColumn Property="x => x.Dto.CurrentUsers" Title="Current Users" Sortable="false" Filterable="false"
+        Hidden="_isMobileView">
         <CellTemplate>
           @(string.Join(", ", context.Item.Dto.CurrentUsers))
         </CellTemplate>
@@ -182,13 +183,15 @@
         </CellTemplate>
       </PropertyColumn>
 
-      <PropertyColumn Property="@(x => x.Dto.UsedMemoryPercent)" Title="Memory" Sortable="true" Filterable="true">
+      <PropertyColumn Property="@(x => x.Dto.UsedMemoryPercent)" Title="Memory" Sortable="true" Filterable="true"
+        Hidden="_isMobileView">
         <CellTemplate>
           @($"{Math.Round(context.Item.Dto.UsedMemoryPercent * 100, 2)}%")
         </CellTemplate>
       </PropertyColumn>
 
-      <PropertyColumn Property="@(x => x.Dto.UsedStoragePercent)" Title="Storage" Sortable="true" Filterable="true">
+      <PropertyColumn Property="@(x => x.Dto.UsedStoragePercent)" Title="Storage" Sortable="true" Filterable="true"
+        Hidden="_isMobileView">
         <CellTemplate>
           @($"{Math.Round(context.Item.Dto.UsedStoragePercent * 100, 2)}%")
         </CellTemplate>

@@ -33,11 +33,12 @@
 
 				<LayoutHeaderButtons OnThemeChanged="HandleThemeChanged" />
 			</MudAppBar>
-			<MudDrawer @bind-Open="DrawerOpen" id="nav-drawer" ClipMode="DrawerClipMode.Always" Elevation="2">
+			<MudDrawer @bind-Open="DrawerOpen" id="nav-drawer" ClipMode="DrawerClipMode.Always" Elevation="2"
+				Breakpoint="Breakpoint.Md" Variant="@DrawerVariant.Responsive">
 
 				<NavMenu />
 			</MudDrawer>
-			<MudMainContent Class="mt-16 pa-4">
+			<MudMainContent Class="mt-16 pa-2 pa-sm-4">
 				@if (RendererInfo.IsInteractive)
 				{
 					<ServerAlertDisplay Class="mb-4" />

@@ -17,6 +17,7 @@ public class AgentHub(
   IOutputCacheStore outputCacheStore,
   IHubStreamStore hubStreamStore,
   IAgentVersionProvider agentVersionProvider,
+  IMetricsIngestionService metricsIngestionService,
   ILogger<AgentHub> logger) : HubWithItems<IAgentHubClient>, IAgentHub
 {
   private readonly IAgentVersionProvider _agentVersionProvider = agentVersionProvider;
@@ -25,6 +26,7 @@ public class AgentHub(
   private readonly IDeviceManager _deviceManager = deviceManager;
   private readonly IHubStreamStore _hubStreamStore = hubStreamStore;
   private readonly ILogger<AgentHub> _logger = logger;
+  private readonly IMetricsIngestionService _metricsIngestionService = metricsIngestionService;
   private readonly IOutputCacheStore _outputCacheStore = outputCacheStore;
   private readonly TimeProvider _timeProvider = timeProvider;
   private readonly IHubContext<ViewerHub, IViewerHubClient> _viewerHub = viewerHub;
@@ -103,6 +105,137 @@ public class AgentHub(
     catch (Exception ex)
     {
       _logger.LogError(ex, "Error during device disconnect.");
+    }
+  }
+
+  public async Task ReportInventory(InventoryReportHubDto report)
+  {
+    try
+    {
+      if (Device is null)
+      {
+        _logger.LogWarning("ReportInventory called but Device is null.");
+        return;
+      }
+
+      var device = await _appDb.Devices
+        .FirstOrDefaultAsync(d => d.Id == report.DeviceId);
+
+      if (device is null)
+      {
+        _logger.LogWarning("Device {DeviceId} not found for inventory report.", report.DeviceId);
+        return;
+      }
+
+      // Update hardware info
+      device.BiosVersion = report.Hardware.BiosVersion;
+      device.LastInventoryScan = DateTimeOffset.UtcNow;
+      device.Manufacturer = report.Hardware.Manufacturer;
+      device.Model = report.Hardware.Model;
+      device.SerialNumber = report.Hardware.SerialNumber;
+
+      // Replace software inventory
+      var existingSoftware = await _appDb.SoftwareInventoryItems
+        .Where(s => s.DeviceId == report.DeviceId)
+        .ToListAsync();
+      _appDb.SoftwareInventoryItems.RemoveRange(existingSoftware);
+
+      var now = DateTimeOffset.UtcNow;
+      var softwareItems = report.Software.Select(s => new SoftwareInventoryItem
+      {
+        DeviceId = report.DeviceId,
+        InstallDate = s.InstallDate,
+        LastReportedAt = now,
+        Name = s.Name,
+        Publisher = s.Publisher,
+        TenantId = device.TenantId,
+        Version = s.Version,
+      });
+      await _appDb.SoftwareInventoryItems.AddRangeAsync(softwareItems);
+
+      // Replace installed updates
+      var existingUpdates = await _appDb.InstalledUpdates
+        .Where(u => u.DeviceId == report.DeviceId)
+        .ToListAsync();
+      _appDb.InstalledUpdates.RemoveRange(existingUpdates);
+
+      var updateItems = report.Updates.Select(u => new InstalledUpdate
+      {
+        DeviceId = report.DeviceId,
+        InstalledOn = u.InstalledOn,
+        LastReportedAt = now,
+        TenantId = device.TenantId,
+        Title = u.Title,
+        UpdateId = u.UpdateId,
+      });
+      await _appDb.InstalledUpdates.AddRangeAsync(updateItems);
+
+      await _appDb.SaveChangesAsync();
+
+      _logger.LogInformation(
+        "Inventory report received for device {DeviceName}: {SoftwareCount} software, {UpdateCount} updates.",
+        device.Name, report.Software.Count, report.Updates.Count);
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error processing inventory report.");
+    }
+  }
+
+  public async Task ReportScriptResult(ScriptExecutionResultHubDto result)
+  {
+    try
+    {
+      var executionResult = await _appDb.ScriptExecutionResults
+        .Include(x => x.ScriptExecution)
+        .FirstOrDefaultAsync(x => x.Id == result.ResultId);
+
+      if (executionResult is null)
+      {
+        _logger.LogWarning("Script execution result {ResultId} not found.", result.ResultId);
+        return;
+      }
+
+      executionResult.CompletedAt = DateTimeOffset.UtcNow;
+      executionResult.ExitCode = result.ExitCode;
+      executionResult.StandardError = result.StandardError;
+      executionResult.StandardOutput = result.StandardOutput;
+      executionResult.StartedAt ??= DateTimeOffset.UtcNow;
+      executionResult.Status = result.Status;
+
+      // Check if all results for this execution are complete
+      var execution = executionResult.ScriptExecution;
+      if (execution is not null)
+      {
+        var allResults = await _appDb.ScriptExecutionResults
+          .Where(x => x.ScriptExecutionId == execution.Id)
+          .ToListAsync();
+
+        var allComplete = allResults.All(r => r.Status is "Completed" or "Failed" or "TimedOut");
+        if (allComplete)
+        {
+          execution.CompletedAt = DateTimeOffset.UtcNow;
+          execution.Status = allResults.Any(r => r.Status == "Failed") ? "CompletedWithErrors" : "Completed";
+        }
+      }
+
+      await _appDb.SaveChangesAsync();
+
+      // Forward progress to viewers in this tenant
+      if (Device is { TenantId: var tenantId })
+      {
+        await _viewerHub.Clients
+          .Group(HubGroupNames.GetUserRoleGroupName(RoleNames.TenantAdministrator, tenantId))
+          .ReceiveScriptExecutionProgress(result);
+
+        await _viewerHub.Clients
+          .Group(HubGroupNames.GetUserRoleGroupName(RoleNames.DeviceSuperUser, tenantId))
+          .ReceiveScriptExecutionProgress(result);
+      }
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while processing script execution result.");
     }
   }
 
@@ -281,6 +414,20 @@ public class AgentHub(
       Device = deviceEntity.ToDto(isOutdated);
 
       await SendDeviceUpdate(deviceEntity, Device);
+
+      // Record metrics snapshot for monitoring
+      var memoryPercent = deviceEntity.TotalMemory > 0
+        ? (deviceEntity.UsedMemory / deviceEntity.TotalMemory) * 100
+        : 0;
+      var diskPercent = deviceEntity.TotalStorage > 0
+        ? (deviceEntity.UsedStorage / deviceEntity.TotalStorage) * 100
+        : 0;
+      _metricsIngestionService.RecordSnapshot(
+        deviceEntity.Id,
+        deviceEntity.TenantId,
+        deviceEntity.CpuUtilization,
+        memoryPercent,
+        diskPercent);
 
       return Result.Ok(Device);
     }

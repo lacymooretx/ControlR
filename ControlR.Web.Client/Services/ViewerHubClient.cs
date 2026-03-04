@@ -1,4 +1,5 @@
-﻿using ControlR.Libraries.Shared.Dtos.Ui;
+﻿using ControlR.Libraries.Shared.Dtos.HubDtos;
+using ControlR.Libraries.Shared.Dtos.Ui;
 using ControlR.Libraries.Shared.Hubs.Clients;
 using ControlR.Web.Client.Extensions;
 
@@ -32,6 +33,11 @@ public class ViewerHubClient(IMessenger messenger)
   public async Task ReceiveDto(DtoWrapper dto)
   {
     await _messenger.Send(new DtoReceivedMessage<DtoWrapper>(dto));
+  }
+
+  public async Task ReceiveScriptExecutionProgress(ScriptExecutionResultHubDto result)
+  {
+    await _messenger.Send(new DtoReceivedMessage<ScriptExecutionResultHubDto>(result));
   }
 
   public async Task ReceiveServerStats(ServerStatsDto serverStats)

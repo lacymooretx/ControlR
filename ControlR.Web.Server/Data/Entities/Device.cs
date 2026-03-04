@@ -13,15 +13,21 @@ public class Device : TenantEntityBase
 
   [StringLength(100)]
   public string Alias { get; set; } = string.Empty;
+
+  [StringLength(200)]
+  public string BiosVersion { get; set; } = string.Empty;
   public string ConnectionId { get; set; } = string.Empty;
   public double CpuUtilization { get; set; }
 
   public string[] CurrentUsers { get; set; } = [];
+  public DeviceGroup? DeviceGroup { get; set; }
+
   public Guid? DeviceGroupId { get; set; }
 
   public List<Drive> Drives { get; set; } = [];
   public bool Is64Bit { get; set; }
   public bool IsOnline { get; set; }
+  public DateTimeOffset? LastInventoryScan { get; set; }
   public DateTimeOffset LastSeen { get; set; }
 
   [StringLength(15)]
@@ -30,6 +36,12 @@ public class Device : TenantEntityBase
   [StringLength(39)]
   public string LocalIpV6 { get; set; } = string.Empty;
   public string[] MacAddresses { get; set; } = [];
+
+  [StringLength(200)]
+  public string Manufacturer { get; set; } = string.Empty;
+
+  [StringLength(200)]
+  public string Model { get; set; } = string.Empty;
 
   [StringLength(100)]
   public string Name { get; set; } = string.Empty;
@@ -47,6 +59,9 @@ public class Device : TenantEntityBase
 
   [StringLength(39)]
   public string PublicIpV6 { get; set; } = string.Empty;
+
+  [StringLength(100)]
+  public string SerialNumber { get; set; } = string.Empty;
 
   public List<Tag>? Tags { get; set; }
 

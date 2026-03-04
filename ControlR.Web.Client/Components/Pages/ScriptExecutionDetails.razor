@@ -1,0 +1,131 @@
+@page "/script-execution/{ExecutionId:guid}"
+@attribute [Authorize]
+@inject IControlrApi ControlrApi
+@inject ISnackbar Snackbar
+
+<MudText Typo="Typo.h4" Color="Color.Primary" GutterBottom>
+  Script Execution Details
+</MudText>
+
+@if (_loading)
+{
+  <MudProgressLinear Indeterminate Color="Color.Primary" />
+}
+else if (_execution is null)
+{
+  <MudAlert Severity="Severity.Error">Execution not found.</MudAlert>
+}
+else
+{
+  <MudPaper Class="pa-4 mb-4">
+    <MudStack Spacing="2">
+      <MudStack Row Spacing="4">
+        <MudText><strong>Script:</strong> @(_execution.ScriptName ?? "Ad-hoc")</MudText>
+        <MudText><strong>Type:</strong> @_execution.ScriptType</MudText>
+        <MudText><strong>Status:</strong>
+          <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(_execution.Status)">
+            @_execution.Status
+          </MudChip>
+        </MudText>
+      </MudStack>
+      <MudStack Row Spacing="4">
+        <MudText><strong>Started:</strong> @_execution.StartedAt.ToString("g")</MudText>
+        @if (_execution.CompletedAt is not null)
+        {
+          <MudText><strong>Completed:</strong> @_execution.CompletedAt.Value.ToString("g")</MudText>
+        }
+      </MudStack>
+    </MudStack>
+  </MudPaper>
+
+  <MudStack Row AlignItems="AlignItems.Center" Class="mb-2">
+    <MudText Typo="Typo.h5">Results</MudText>
+    <MudSpacer />
+    <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Info"
+      OnClick="RefreshExecution" />
+  </MudStack>
+
+  @foreach (var result in _execution.Results)
+  {
+    <MudExpansionPanels Class="mb-2">
+      <MudExpansionPanel>
+        <TitleContent>
+          <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.Computer" Size="Size.Small" />
+            <MudText><strong>@(result.DeviceName ?? result.DeviceId.ToString())</strong></MudText>
+            <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(result.Status)">
+              @result.Status
+            </MudChip>
+            @if (result.ExitCode is not null)
+            {
+              <MudText Typo="Typo.body2">Exit Code: @result.ExitCode</MudText>
+            }
+          </MudStack>
+        </TitleContent>
+        <ChildContent>
+          @if (!string.IsNullOrWhiteSpace(result.StandardOutput))
+          {
+            <MudText Typo="Typo.subtitle2" Class="mt-2">Standard Output</MudText>
+            <MudPaper Class="pa-2 mb-2" Style="background-color: var(--mud-palette-background-grey); overflow-x: auto;">
+              <pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word; font-size: 0.85rem;">@result.StandardOutput</pre>
+            </MudPaper>
+          }
+          @if (!string.IsNullOrWhiteSpace(result.StandardError))
+          {
+            <MudText Typo="Typo.subtitle2" Color="Color.Error" Class="mt-2">Standard Error</MudText>
+            <MudPaper Class="pa-2 mb-2" Style="background-color: var(--mud-palette-background-grey); overflow-x: auto;">
+              <pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word; font-size: 0.85rem; color: var(--mud-palette-error);">@result.StandardError</pre>
+            </MudPaper>
+          }
+          @if (string.IsNullOrWhiteSpace(result.StandardOutput) && string.IsNullOrWhiteSpace(result.StandardError))
+          {
+            <MudText Typo="Typo.body2" Color="Color.Default">No output.</MudText>
+          }
+        </ChildContent>
+      </MudExpansionPanel>
+    </MudExpansionPanels>
+  }
+}
+
+@code {
+  [Parameter]
+  public Guid ExecutionId { get; set; }
+
+  private ScriptExecutionDto? _execution;
+  private bool _loading = true;
+
+  protected override async Task OnInitializedAsync()
+  {
+    await RefreshExecution();
+  }
+
+  private async Task RefreshExecution()
+  {
+    _loading = true;
+    StateHasChanged();
+
+    var result = await ControlrApi.GetScriptExecution(ExecutionId);
+    if (result.IsSuccess)
+    {
+      _execution = result.Value;
+    }
+    else
+    {
+      Snackbar.Add(result.Reason, Severity.Error);
+    }
+
+    _loading = false;
+    StateHasChanged();
+  }
+
+  private static Color GetStatusColor(string status) => status switch
+  {
+    "Completed" => Color.Success,
+    "CompletedWithErrors" => Color.Warning,
+    "Failed" => Color.Error,
+    "TimedOut" => Color.Error,
+    "Running" => Color.Info,
+    "Pending" => Color.Default,
+    _ => Color.Default
+  };
+}

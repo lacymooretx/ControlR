@@ -4,17 +4,27 @@ public static class HttpConstants
 {
   public const string AgentUpdateEndpoint = "/api/agent-update";
   public const string AgentVersionEndpoint = "/api/version/agent";
+  public const string AlertRulesEndpoint = "/api/alert-rules";
+  public const string AlertsEndpoint = "/api/alerts";
+  public const string AuditLogsEndpoint = "/api/audit-logs";
+  public const string ClientPortalEndpoint = "/api/client-portal";
   public const string DesktopPreviewEndpoint = "/api/desktop-preview";
   public const string DeviceFileSystemEndpoint = "/api/device-file-system";
+  public const string DeviceGroupsEndpoint = "/api/device-groups";
   public const string DeviceTagsEndpoint = "/api/device-tags";
   public const string DevicesEndpoint = "/api/devices";
   public const string InstallerKeysEndpoint = "/api/installer-keys";
+  public const string InventoryEndpoint = "/api/inventory";
   public const string InvitesEndpoint = "/api/invites";
   public const string LogonTokensEndpoint = "/api/logon-tokens";
   public const string LogoutEndpoint = "/api/logout";
+  public const string MetricsEndpoint = "/api/metrics";
   public const string PersonalAccessTokensEndpoint = "/api/personal-access-tokens";
   public const string PublicRegistrationSettingsEndpoint = "/api/public-registration-settings";
   public const string RolesEndpoint = "/api/roles";
+  public const string ScheduledTasksEndpoint = "/api/scheduled-tasks";
+  public const string ScriptExecutionsEndpoint = "/api/script-executions";
+  public const string ScriptsEndpoint = "/api/scripts";
   public const string ServerAlertEndpoint = "/api/server-alert";
   public const string ServerLogsEndpoint = "/api/server-logs";
   public const string ServerStatsEndpoint = "/api/server-stats";
@@ -27,4 +37,5 @@ public static class HttpConstants
   public const string UserServerSettingsEndpoint = "/api/user-server-settings";
   public const string UserTagsEndpoint = "/api/user-tags";
   public const string UsersEndpoint = "/api/users";
+  public const string WebhooksEndpoint = "/api/webhooks";
 }

@@ -1,0 +1,95 @@
+@page "/asset-management"
+@attribute [Authorize]
+@inject IControlrApi ControlrApi
+@inject ISnackbar Snackbar
+@inject NavigationManager NavMan
+
+<MudText Typo="Typo.h4" Color="Color.Primary" GutterBottom>
+  Asset Management
+</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+  <MudText Typo="Typo.subtitle1" GutterBottom>Search across all devices</MudText>
+  <MudStack Row AlignItems="AlignItems.End">
+    <MudTextField @bind-Value="_softwareName" Label="Software Name"
+      Variant="Variant.Outlined" Class="mr-2" />
+    <MudTextField @bind-Value="_softwareVersion" Label="Version (optional)"
+      Variant="Variant.Outlined" Class="mr-2" Style="max-width: 200px;" />
+    <MudTextField @bind-Value="_updateId" Label="Update / KB Number"
+      Variant="Variant.Outlined" Class="mr-2" />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+      StartIcon="@Icons.Material.Filled.Search" OnClick="Search"
+      Disabled="@(string.IsNullOrWhiteSpace(_softwareName) && string.IsNullOrWhiteSpace(_updateId))">
+      Search
+    </MudButton>
+  </MudStack>
+</MudPaper>
+
+@if (_searching)
+{
+  <MudProgressLinear Indeterminate Color="Color.Primary" />
+}
+else if (_hasSearched && _results.Count == 0)
+{
+  <MudAlert Severity="Severity.Info">
+    No results found.
+  </MudAlert>
+}
+else if (_results.Count > 0)
+{
+  <MudDataGrid T="InventorySearchResultDto" Items="_results" SortMode="SortMode.Single"
+    Filterable="false" Hideable="false">
+    <Columns>
+      <PropertyColumn Property="x => x.DeviceName" Title="Device" />
+      <PropertyColumn Property="x => x.SoftwareName" Title="Name" />
+      <PropertyColumn Property="x => x.SoftwareVersion" Title="Version" />
+      <PropertyColumn Property="x => x.Publisher" Title="Publisher" />
+      <TemplateColumn T="InventorySearchResultDto" Title="Actions" Sortable="false">
+        <CellTemplate>
+          <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+            OnClick="@(() => ViewDevice(context.Item.DeviceId))">
+            View Device
+          </MudButton>
+        </CellTemplate>
+      </TemplateColumn>
+    </Columns>
+  </MudDataGrid>
+}
+
+@code {
+  private string _softwareName = string.Empty;
+  private string _softwareVersion = string.Empty;
+  private string _updateId = string.Empty;
+  private bool _searching;
+  private bool _hasSearched;
+  private List<InventorySearchResultDto> _results = [];
+
+  private async Task Search()
+  {
+    _searching = true;
+    _hasSearched = true;
+    StateHasChanged();
+
+    var request = new InventorySearchRequestDto(
+      string.IsNullOrWhiteSpace(_softwareName) ? null : _softwareName,
+      string.IsNullOrWhiteSpace(_softwareVersion) ? null : _softwareVersion,
+      string.IsNullOrWhiteSpace(_updateId) ? null : _updateId);
+
+    var result = await ControlrApi.SearchInventory(request);
+    if (result.IsSuccess)
+    {
+      _results = result.Value.ToList();
+    }
+    else
+    {
+      Snackbar.Add($"Search failed: {result.Reason}", Severity.Error);
+    }
+
+    _searching = false;
+  }
+
+  private void ViewDevice(Guid deviceId)
+  {
+    NavMan.NavigateTo($"{ClientRoutes.DeviceInventory}/{deviceId}");
+  }
+}

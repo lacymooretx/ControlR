@@ -1,4 +1,5 @@
 ﻿global using MudBlazor;
+global using MudBlazor.Services;
 global using Bitbound.SimpleMessenger;
 global using ControlR.Libraries.Shared.Collections;
 global using ControlR.Libraries.Shared;

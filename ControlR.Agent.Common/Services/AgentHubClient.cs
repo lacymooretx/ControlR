@@ -7,6 +7,7 @@ using ControlR.Agent.Common.Services.Terminal;
 using ControlR.Libraries.DevicesCommon.Services.Processes;
 using ControlR.Libraries.Shared.Constants;
 using ControlR.Libraries.Shared.Dtos.Devices;
+using ControlR.Libraries.Shared.Dtos.HubDtos;
 using ControlR.Libraries.Shared.Dtos.HubDtos.PwshCommandCompletions;
 using ControlR.Libraries.Shared.Dtos.IpcDtos;
 using ControlR.Libraries.Shared.Dtos.RemoteControlDtos;
@@ -38,6 +39,7 @@ internal class AgentHubClient(
   IDeviceInfoProvider deviceDataGenerator,
   IAgentUpdater agentUpdater,
   IWakeOnLanService wakeOnLan,
+  IScriptRunner scriptRunner,
   IAgentHeartbeatTimer heartbeatTimer,
   ILogger<AgentHubClient> logger) : IAgentHubClient
 {
@@ -56,6 +58,7 @@ internal class AgentHubClient(
   private readonly IMessenger _messenger = messenger;
   private readonly IPowerControl _powerControl = powerControl;
   private readonly IProcessManager _processManager = processManager;
+  private readonly IScriptRunner _scriptRunner = scriptRunner;
   private readonly ISettingsProvider _settings = settings;
   private readonly ISystemEnvironment _systemEnvironment = systemEnvironment;
   private readonly ITerminalStore _terminalStore = terminalStore;
@@ -109,6 +112,35 @@ internal class AgentHubClient(
     }
 
     return Task.CompletedTask;
+  }
+
+  public async Task CollectInventory()
+  {
+    try
+    {
+      _logger.LogInformation("Inventory collection requested by server.");
+
+      var deviceInfo = await _deviceDataGenerator.CreateDevice();
+      var hardware = new HardwareInfoHubDto(
+        string.Empty,
+        string.Empty,
+        string.Empty,
+        string.Empty);
+
+      var report = new InventoryReportHubDto(
+        deviceInfo.Id,
+        [],
+        [],
+        hardware);
+
+      await _hubConnection.Server.ReportInventory(report);
+
+      _logger.LogInformation("Inventory report sent to server.");
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error collecting inventory.");
+    }
   }
 
   public async Task<Result> CreateDirectory(CreateDirectoryHubDto dto)
@@ -325,6 +357,25 @@ internal class AgentHubClient(
       _logger.LogError(ex, "Error while downloading file from viewer: {FileName} to {Directory}",
         dto.FileName, dto.TargetDirectoryPath);
       return Result.Fail("An error occurred while downloading file from viewer.");
+    }
+  }
+
+  public async Task ExecuteScript(ScriptExecutionRequestHubDto request)
+  {
+    try
+    {
+      _logger.LogInformation(
+        "Script execution request received. Execution: {ExecutionId}, Result: {ResultId}, Type: {ScriptType}",
+        request.ExecutionId,
+        request.ResultId,
+        request.ScriptType);
+
+      // Fire and forget - the script runner reports results back via hub
+      _ = Task.Run(() => _scriptRunner.ExecuteScript(request));
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while starting script execution.");
     }
   }
 

@@ -1,0 +1,153 @@
+@page "/monitoring"
+@attribute [Authorize]
+@inject IControlrApi ControlrApi
+@inject ISnackbar Snackbar
+@inject NavigationManager NavMan
+
+<MudText Typo="Typo.h4" Color="Color.Primary" GutterBottom>
+  Monitoring
+</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+  <MudStack Row AlignItems="AlignItems.Center">
+    <MudSelect T="string" Label="Alert Status" Value="_statusFilter" ValueChanged="OnStatusFilterChanged"
+      Variant="Variant.Outlined" Class="mr-4" Style="max-width: 200px;">
+      <MudSelectItem Value="@("Active")">Active</MudSelectItem>
+      <MudSelectItem Value="@("Acknowledged")">Acknowledged</MudSelectItem>
+      <MudSelectItem Value="@("Resolved")">Resolved</MudSelectItem>
+      <MudSelectItem Value="@("")">All</MudSelectItem>
+    </MudSelect>
+    <MudSpacer />
+    <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Info"
+      OnClick="RefreshAlerts" />
+  </MudStack>
+</MudPaper>
+
+@if (_loading)
+{
+  <MudProgressLinear Indeterminate Color="Color.Primary" />
+}
+else if (_alerts.Count == 0)
+{
+  <MudAlert Severity="Severity.Success">
+    No @(string.IsNullOrEmpty(_statusFilter) ? "" : _statusFilter.ToLower() + " ") alerts.
+  </MudAlert>
+}
+else
+{
+  <MudDataGrid T="AlertDto" Items="_alerts" SortMode="SortMode.Single"
+    Filterable="false" Hideable="false">
+    <Columns>
+      <TemplateColumn T="AlertDto" Title="Status" Sortable="false">
+        <CellTemplate>
+          @{
+            var color = context.Item.Status switch
+            {
+              "Active" => Color.Error,
+              "Acknowledged" => Color.Warning,
+              "Resolved" => Color.Success,
+              _ => Color.Default,
+            };
+          }
+          <MudChip T="string" Color="@color" Size="Size.Small">
+            @context.Item.Status
+          </MudChip>
+        </CellTemplate>
+      </TemplateColumn>
+      <PropertyColumn Property="x => x.DeviceName" Title="Device" />
+      <PropertyColumn Property="x => x.AlertRuleName" Title="Rule" />
+      <PropertyColumn Property="x => x.Details" Title="Details" />
+      <TemplateColumn T="AlertDto" Title="Triggered" Sortable="true" SortBy="x => x.TriggeredAt">
+        <CellTemplate>
+          @context.Item.TriggeredAt.LocalDateTime.ToString("g")
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="AlertDto" Title="Actions" Sortable="false">
+        <CellTemplate>
+          @{
+            var alert = context.Item;
+          }
+          <MudStack Row>
+            @if (alert.Status == "Active")
+            {
+              <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning"
+                OnClick="@(() => AcknowledgeAlert(alert))">
+                Acknowledge
+              </MudButton>
+            }
+            @if (alert.Status is "Active" or "Acknowledged")
+            {
+              <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success"
+                OnClick="@(() => ResolveAlert(alert))">
+                Resolve
+              </MudButton>
+            }
+          </MudStack>
+        </CellTemplate>
+      </TemplateColumn>
+    </Columns>
+  </MudDataGrid>
+}
+
+@code {
+  private bool _loading = true;
+  private string _statusFilter = "Active";
+  private List<AlertDto> _alerts = [];
+
+  protected override async Task OnInitializedAsync()
+  {
+    await RefreshAlerts();
+  }
+
+  private async Task OnStatusFilterChanged(string value)
+  {
+    _statusFilter = value;
+    await RefreshAlerts();
+  }
+
+  private async Task RefreshAlerts()
+  {
+    _loading = true;
+    StateHasChanged();
+
+    var result = await ControlrApi.GetAlerts(string.IsNullOrEmpty(_statusFilter) ? null : _statusFilter);
+    if (result.IsSuccess)
+    {
+      _alerts = result.Value.ToList();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to load alerts: {result.Reason}", Severity.Error);
+    }
+
+    _loading = false;
+  }
+
+  private async Task AcknowledgeAlert(AlertDto alert)
+  {
+    var result = await ControlrApi.AcknowledgeAlert(alert.Id);
+    if (result.IsSuccess)
+    {
+      Snackbar.Add("Alert acknowledged.", Severity.Success);
+      await RefreshAlerts();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to acknowledge alert: {result.Reason}", Severity.Error);
+    }
+  }
+
+  private async Task ResolveAlert(AlertDto alert)
+  {
+    var result = await ControlrApi.ResolveAlert(alert.Id);
+    if (result.IsSuccess)
+    {
+      Snackbar.Add("Alert resolved.", Severity.Success);
+      await RefreshAlerts();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to resolve alert: {result.Reason}", Severity.Error);
+    }
+  }
+}

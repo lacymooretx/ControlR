@@ -9,12 +9,14 @@ using ControlR.Web.Server.Authz;
 using ControlR.Web.Server.Data.Configuration;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.Extensions.FileProviders;
 using MudBlazor.Services;
 using ControlR.Web.Server.Components.Account;
 using ControlR.Libraries.WebSocketRelay.Common.Extensions;
+using ControlR.Web.Server.Services;
 using ControlR.Web.Server.Services.Users;
 using ControlR.Web.Server.Services.LogonTokens;
 using ControlR.Web.Client.Services;
@@ -160,6 +162,29 @@ public static class WebApplicationBuilderExtensions
       });
     }
 
+    if (!string.IsNullOrWhiteSpace(appOptions.EntraIdClientId) &&
+        !string.IsNullOrWhiteSpace(appOptions.EntraIdClientSecret))
+    {
+      var entraInstance = appOptions.EntraIdInstance ?? "https://login.microsoftonline.com/";
+      var entraTenantId = appOptions.EntraIdTenantId ?? "common";
+
+      authBuilder.AddOpenIdConnect("EntraId", "Entra ID", options =>
+      {
+        options.Authority = $"{entraInstance.TrimEnd('/')}/{entraTenantId}/v2.0";
+        options.ClientId = appOptions.EntraIdClientId;
+        options.ClientSecret = appOptions.EntraIdClientSecret;
+        options.ResponseType = "code";
+        options.SaveTokens = true;
+        options.GetClaimsFromUserInfoEndpoint = true;
+        options.Scope.Add("openid");
+        options.Scope.Add("profile");
+        options.Scope.Add("email");
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters.NameClaimType = "preferred_username";
+        options.TokenValidationParameters.RoleClaimType = "roles";
+      });
+    }
+
     authBuilder.AddIdentityCookies();
 
     builder.Services.ConfigureApplicationCookie(options =>
@@ -302,6 +327,19 @@ public static class WebApplicationBuilderExtensions
     builder.Services.AddScoped<IAgentVersionProvider, AgentVersionProvider>();
     builder.Services.AddScoped<IPersonalAccessTokenManager, PersonalAccessTokenManager>();
     builder.Services.AddScoped<IPasswordHasher<string>, PasswordHasher<string>>();
+    builder.Services.AddSingleton<AuditService>();
+    builder.Services.AddSingleton<IAuditService>(sp => sp.GetRequiredService<AuditService>());
+    builder.Services.AddHostedService<AuditLogBackgroundService>();
+    builder.Services.AddSingleton<MetricsIngestionService>();
+    builder.Services.AddSingleton<IMetricsIngestionService>(sp => sp.GetRequiredService<MetricsIngestionService>());
+    builder.Services.AddHostedService<MetricsIngestionBackgroundService>();
+    builder.Services.AddHostedService<AlertEvaluationService>();
+    builder.Services.AddSingleton<ISchedulerService, SchedulerService>();
+    builder.Services.AddHostedService<SchedulerBackgroundService>();
+    builder.Services.AddSingleton<WebhookDispatcher>();
+    builder.Services.AddSingleton<IWebhookDispatcher>(sp => sp.GetRequiredService<WebhookDispatcher>());
+    builder.Services.AddHostedService<WebhookDispatcherBackgroundService>();
+    builder.Services.AddHttpClient("Webhook");
     builder.Services.AddScoped<IDeviceManager, DeviceManager>();
     builder.Services.AddScoped<IUserSettingsProvider, UserSettingsProviderServer>();
     builder.Services.AddScoped<IPublicRegistrationSettingsProvider, PublicRegistrationSettingsProviderServer>();

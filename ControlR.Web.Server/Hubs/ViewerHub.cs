@@ -4,8 +4,11 @@ using ControlR.Libraries.Shared.Constants;
 using ControlR.Libraries.Shared.Dtos.Devices;
 using ControlR.Libraries.Shared.Dtos.HubDtos;
 using ControlR.Libraries.Shared.Dtos.HubDtos.PwshCommandCompletions;
+using ControlR.Libraries.Shared.Dtos.ServerApi;
+using ControlR.Libraries.Shared.Enums;
 using ControlR.Libraries.Shared.Helpers;
 using ControlR.Libraries.Shared.Hubs.Clients;
+using ControlR.Web.Server.Services;
 using Microsoft.AspNetCore.SignalR;
 
 namespace ControlR.Web.Server.Hubs;
@@ -18,12 +21,14 @@ public class ViewerHub(
   IHubContext<AgentHub, IAgentHubClient> agentHub,
   IHubStreamStore hubStreamStore,
   IOptionsMonitor<AppOptions> appOptions,
+  IAuditService auditService,
   ILogger<ViewerHub> logger)
   : HubWithItems<IViewerHubClient>, IViewerHub
 {
   private readonly IHubContext<AgentHub, IAgentHubClient> _agentHub = agentHub;
   private readonly AppDb _appDb = appDb;
   private readonly IOptionsMonitor<AppOptions> _appOptions = appOptions;
+  private readonly IAuditService _auditService = auditService;
   private readonly IAuthorizationService _authorizationService = authorizationService;
   private readonly IHubStreamStore _hubStreamStore = hubStreamStore;
   private readonly ILogger<ViewerHub> _logger = logger;
@@ -67,6 +72,8 @@ public class ViewerHub(
       await _agentHub.Clients
         .Client(authResult.Value.ConnectionId)
         .CloseTerminalSession(terminalSessionId);
+
+      AuditHubAction(AuditEventTypes.Terminal, AuditActions.End, authResult.Value, terminalSessionId);
     }
     catch (Exception ex)
     {
@@ -85,14 +92,169 @@ public class ViewerHub(
         return Result.Fail("Forbidden.");
       }
 
-      return await _agentHub.Clients
+      var result = await _agentHub.Clients
         .Client(authResult.Value.ConnectionId)
         .CreateTerminalSession(terminalSessionId, Context.ConnectionId);
+
+      if (result.IsSuccess)
+      {
+        AuditHubAction(AuditEventTypes.Terminal, AuditActions.Start, authResult.Value, terminalSessionId);
+      }
+
+      return result;
     }
     catch (Exception ex)
     {
       _logger.LogError(ex, "Error while creating terminal session.");
       return Result.Fail("An error occurred.");
+    }
+  }
+
+  public async Task<Result<ScriptExecutionDto>> ExecuteScript(ExecuteScriptRequestDto request)
+  {
+    try
+    {
+      if (!TryGetUserId(out var userId))
+      {
+        return Result.Fail<ScriptExecutionDto>("Failed to get user ID.");
+      }
+
+      if (!TryGetTenantId(out var tenantId))
+      {
+        return Result.Fail<ScriptExecutionDto>("Failed to get tenant ID.");
+      }
+
+      var isClientUser = Context.User?.IsInRole(RoleNames.ClientUser) ?? false;
+
+      // Resolve script content and type
+      string scriptContent;
+      string scriptType;
+      Guid? scriptId = null;
+
+      if (request.ScriptId is not null)
+      {
+        var script = await _appDb.SavedScripts
+          .AsNoTracking()
+          .FirstOrDefaultAsync(x => x.Id == request.ScriptId);
+
+        if (script is null)
+        {
+          return Result.Fail<ScriptExecutionDto>("Script not found.");
+        }
+
+        if (isClientUser && !script.IsPublishedToClients)
+        {
+          return Result.Fail<ScriptExecutionDto>("Script not available.");
+        }
+
+        scriptContent = script.ScriptContent;
+        scriptType = script.ScriptType;
+        scriptId = script.Id;
+      }
+      else
+      {
+        if (isClientUser)
+        {
+          return Result.Fail<ScriptExecutionDto>("Ad-hoc scripts are not allowed for client users.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.AdHocScriptContent))
+        {
+          return Result.Fail<ScriptExecutionDto>("Script content is required.");
+        }
+
+        scriptContent = request.AdHocScriptContent;
+        scriptType = request.ScriptType;
+      }
+
+      // Authorize against each target device
+      var authorizedDevices = new List<Device>();
+      foreach (var deviceId in request.TargetDeviceIds)
+      {
+        if (await TryAuthorizeAgainstDevice(deviceId) is { IsSuccess: true } authResult)
+        {
+          authorizedDevices.Add(authResult.Value);
+        }
+      }
+
+      if (authorizedDevices.Count == 0)
+      {
+        return Result.Fail<ScriptExecutionDto>("No authorized devices found.");
+      }
+
+      // Create execution record
+      var execution = new ScriptExecution
+      {
+        AdHocScriptContent = request.ScriptId is null ? scriptContent : null,
+        InitiatedByUserId = userId,
+        ScriptId = scriptId,
+        ScriptType = scriptType,
+        StartedAt = DateTimeOffset.UtcNow,
+        Status = "Running",
+        TenantId = tenantId,
+      };
+
+      await _appDb.ScriptExecutions.AddAsync(execution);
+
+      // Create result records for each device
+      var results = new List<ScriptExecutionResult>();
+      foreach (var device in authorizedDevices)
+      {
+        var result = new ScriptExecutionResult
+        {
+          DeviceId = device.Id,
+          DeviceName = device.Name,
+          ScriptExecutionId = execution.Id,
+          Status = "Pending",
+          TenantId = tenantId,
+        };
+        results.Add(result);
+      }
+
+      await _appDb.ScriptExecutionResults.AddRangeAsync(results);
+      await _appDb.SaveChangesAsync();
+
+      // Fan out to agents
+      foreach (var device in authorizedDevices)
+      {
+        var resultId = results.First(r => r.DeviceId == device.Id).Id;
+        var hubDto = new ScriptExecutionRequestHubDto(
+          execution.Id,
+          resultId,
+          scriptContent,
+          scriptType);
+
+        try
+        {
+          await _agentHub.Clients
+            .Client(device.ConnectionId)
+            .ExecuteScript(hubDto);
+        }
+        catch (Exception ex)
+        {
+          _logger.LogError(ex, "Failed to send script to device {DeviceId}.", device.Id);
+        }
+      }
+
+      // Reload with nav properties for DTO
+      var savedExecution = await _appDb.ScriptExecutions
+        .AsNoTracking()
+        .Include(x => x.Script)
+        .Include(x => x.Results)
+        .FirstAsync(x => x.Id == execution.Id);
+
+      AuditHubAction(
+        AuditEventTypes.ScriptExecution,
+        AuditActions.Execute,
+        authorizedDevices.First(),
+        details: $"Execution: {execution.Id}, Devices: {authorizedDevices.Count}");
+
+      return Result.Ok(savedExecution.ToDto());
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while executing script.");
+      return Result.Fail<ScriptExecutionDto>("An error occurred while executing the script.");
     }
   }
 
@@ -346,9 +508,16 @@ public class ViewerHub(
         ViewerConnectionId = Context.ConnectionId
       };
 
-      return await _agentHub.Clients
+      var result = await _agentHub.Clients
         .Client(device.ConnectionId)
         .CreateRemoteControlSession(sessionRequestDto);
+
+      if (result.IsSuccess)
+      {
+        AuditHubAction(AuditEventTypes.RemoteControl, AuditActions.Start, device);
+      }
+
+      return result;
     }
     catch (Exception ex)
     {
@@ -432,6 +601,8 @@ public class ViewerHub(
       await _agentHub.Clients
         .Client(authResult.Value.ConnectionId)
         .ReceiveAgentUpdateTrigger();
+
+      AuditHubAction(AuditEventTypes.AgentUpdate, AuditActions.Trigger, authResult.Value);
     }
     catch (Exception ex)
     {
@@ -466,9 +637,16 @@ public class ViewerHub(
         SenderEmail = $"{user.Email}"
       };
 
-      return await _agentHub.Clients
+      var result = await _agentHub.Clients
         .Client(authResult.Value.ConnectionId)
         .SendChatMessage(dto);
+
+      if (result.IsSuccess)
+      {
+        AuditHubAction(AuditEventTypes.Chat, AuditActions.Send, authResult.Value, dto.SessionId);
+      }
+
+      return result;
     }
     catch (Exception ex)
     {
@@ -543,6 +721,9 @@ public class ViewerHub(
       await _agentHub.Clients
         .Client(authResult.Value.ConnectionId)
         .ReceivePowerStateChange(changeType);
+
+      var action = changeType == PowerStateChangeType.Restart ? AuditActions.Restart : AuditActions.Shutdown;
+      AuditHubAction(AuditEventTypes.PowerState, action, authResult.Value);
     }
     catch (Exception ex)
     {
@@ -596,6 +777,9 @@ public class ViewerHub(
       await _agentHub.Clients
         .Groups(tagGroupNames)
         .InvokeWakeDevice(dto);
+
+      AuditHubAction(AuditEventTypes.WakeDevice, AuditActions.Invoke, authResult.Value,
+        details: $"MACs: {string.Join(", ", macAddresses)}");
     }
     catch (Exception ex)
     {
@@ -640,6 +824,9 @@ public class ViewerHub(
       await _agentHub.Clients
         .Client(authResult.Value.ConnectionId)
         .UninstallAgent(reason);
+
+      AuditHubAction(AuditEventTypes.UninstallAgent, AuditActions.Invoke, authResult.Value,
+        details: $"Reason: {reason}");
     }
     catch (Exception ex)
     {
@@ -714,6 +901,9 @@ public class ViewerHub(
         return Result.Fail("An error occurred while writing the file stream.");
       }
 
+      AuditHubAction(AuditEventTypes.FileTransfer, AuditActions.Upload, device,
+        details: $"File: {fileUploadMetadata.FileName}, Size: {fileUploadMetadata.FileSize}");
+
       return Result.Ok();
     }
     catch (OperationCanceledException)
@@ -743,6 +933,34 @@ public class ViewerHub(
     }
 
     return displayName.AsTaskResult();
+  }
+
+  private void AuditHubAction(
+    string eventType,
+    string action,
+    Device device,
+    Guid? sessionId = null,
+    string? details = null)
+  {
+    if (!TryGetTenantId(out var tenantId))
+    {
+      return;
+    }
+
+    TryGetUserId(out var userId);
+    var sourceIp = Context.GetHttpContext()?.Connection.RemoteIpAddress?.ToString();
+
+    _auditService.LogEvent(
+      tenantId,
+      eventType,
+      action,
+      actorUserId: userId,
+      actorUserName: Context.User?.Identity?.Name,
+      targetDeviceId: device.Id,
+      targetDeviceName: device.Name,
+      sourceIpAddress: sourceIp,
+      sessionId: sessionId,
+      details: details);
   }
 
   private async Task<Result<string>> GetDisplayName(Guid userId)

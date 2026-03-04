@@ -118,7 +118,7 @@ public class DevicesController : ControllerBase
     [FromServices] IAgentVersionProvider agentVersionProvider,
     [FromServices] IAuthorizationService authorizationService)
   {
-    var deviceStream = appDb.Devices.AsAsyncEnumerable();
+    var deviceStream = appDb.Devices.Include(x => x.DeviceGroup).AsAsyncEnumerable();
 
     await foreach (var device in deviceStream)
     {
@@ -170,6 +170,7 @@ public class DevicesController : ControllerBase
     // Start with all devices
     var anyDevices = await appDb.Devices.AnyAsync();
     var query = appDb.Devices
+      .Include(x => x.DeviceGroup)
       .Include(x => x.Tags)
       .AsSplitQuery()
       .OrderBy(x => x.CreatedAt)

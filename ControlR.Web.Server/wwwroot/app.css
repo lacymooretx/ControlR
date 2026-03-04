@@ -61,3 +61,47 @@
 .loading-progress-text::after {
     content: var(--blazor-load-percentage-text);
 }
+
+/* Mobile PWA adjustments */
+@media (max-width: 599.95px) {
+  .mud-table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mud-dialog {
+    margin: 8px !important;
+    max-height: calc(100vh - 16px) !important;
+  }
+
+  .mud-dialog .mud-dialog-content {
+    max-height: calc(100vh - 140px) !important;
+    overflow-y: auto;
+  }
+
+  .mud-appbar .mud-typography-h6 {
+    font-size: 1rem !important;
+  }
+
+  .top-controls-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+}
+
+@media (max-width: 959.95px) {
+  .mud-data-grid .mud-table-cell {
+    padding: 6px 8px !important;
+  }
+}
+
+/* Safe area for notched mobile devices */
+@supports (padding: env(safe-area-inset-top)) {
+  .mud-appbar {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .mud-main-content {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

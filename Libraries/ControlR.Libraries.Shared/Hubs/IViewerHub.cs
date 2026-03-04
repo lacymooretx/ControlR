@@ -3,6 +3,7 @@ using ControlR.Libraries.Shared.Dtos.Devices;
 using ControlR.Libraries.Shared.Dtos.HubDtos;
 using ControlR.Libraries.Shared.Dtos.HubDtos.PwshCommandCompletions;
 using ControlR.Libraries.Shared.Dtos.RemoteControlDtos;
+using ControlR.Libraries.Shared.Dtos.ServerApi;
 using ControlR.Libraries.Shared.Enums;
 
 namespace ControlR.Libraries.Shared.Hubs;
@@ -16,6 +17,7 @@ public interface IViewerHub
     Guid deviceId,
     Guid terminalSessionId);
 
+  Task<Result<ScriptExecutionDto>> ExecuteScript(ExecuteScriptRequestDto request);
   Task<DesktopSession[]> GetActiveDesktopSessions(Guid deviceId);
   Task<Result<PwshCompletionsResponseDto>> GetPwshCompletions(PwshCompletionsRequestDto request);
   Task<Result> InvokeCtrlAltDel(Guid deviceId, int targetDesktopProcessId, DesktopSessionType desktopSessionType);

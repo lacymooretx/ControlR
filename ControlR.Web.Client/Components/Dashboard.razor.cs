@@ -17,10 +17,14 @@ public partial class Dashboard
   private bool? _anyDevicesForUser;
   private MudDataGrid<DeviceViewModel>? _dataGrid;
   private bool _hideOfflineDevices;
+  private bool _isMobileView;
   private bool _loading = true;
   private int _rowsPerPage = 25;
   private string? _searchText;
   private HashSet<TagViewModel> _selectedTags = [];
+
+  [Inject]
+  public required IBrowserViewportService BrowserViewport { get; init; }
 
   [Inject]
   public required IControlrApi ControlrApi { get; init; }
@@ -63,6 +67,9 @@ public partial class Dashboard
     await base.OnInitializedAsync();
 
     _hideOfflineDevices = await Settings.GetHideOfflineDevices();
+
+    var breakpoint = await BrowserViewport.GetCurrentBreakpointAsync();
+    _isMobileView = breakpoint <= Breakpoint.Sm;
 
     Messenger.Register<HubConnectionStateChangedMessage>(this, HandleHubConnectionStateChangedMessage);
     Messenger.Register<DtoReceivedMessage<DeviceResponseDto>>(this, HandleDeviceDtoReceived);

@@ -1,0 +1,189 @@
+@page "/scheduled-tasks"
+@attribute [Authorize(Roles = RoleNames.TenantAdministrator)]
+@inject IControlrApi ControlrApi
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager NavMan
+
+<MudText Typo="Typo.h4" Color="Color.Primary" GutterBottom>
+  Scheduled Tasks
+</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+  <MudStack Row AlignItems="AlignItems.Center">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+      StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+      New Task
+    </MudButton>
+    <MudSpacer />
+    <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Info"
+      OnClick="RefreshTasks" />
+  </MudStack>
+</MudPaper>
+
+@if (_loading)
+{
+  <MudProgressLinear Indeterminate Color="Color.Primary" />
+}
+else if (_tasks.Count == 0)
+{
+  <MudAlert Severity="Severity.Info">
+    No scheduled tasks configured.
+  </MudAlert>
+}
+else
+{
+  <MudDataGrid T="ScheduledTaskDto" Items="_tasks" SortMode="SortMode.Single"
+    Filterable="false" Hideable="false">
+    <Columns>
+      <PropertyColumn Property="x => x.Name" Title="Name" />
+      <PropertyColumn Property="x => x.TaskType" Title="Type" />
+      <PropertyColumn Property="x => x.CronExpression" Title="Schedule" />
+      <PropertyColumn Property="x => x.TimeZone" Title="Time Zone" />
+      <TemplateColumn T="ScheduledTaskDto" Title="Status" Sortable="false">
+        <CellTemplate>
+          @{
+            var item = context.Item;
+          }
+          @if (item.IsEnabled)
+          {
+            <MudChip T="string" Size="Size.Small" Color="Color.Success">Enabled</MudChip>
+          }
+          else
+          {
+            <MudChip T="string" Size="Size.Small" Color="Color.Default">Disabled</MudChip>
+          }
+        </CellTemplate>
+      </TemplateColumn>
+      <PropertyColumn Property="x => x.LastRunAt" Title="Last Run" Format="g" />
+      <PropertyColumn Property="x => x.NextRunAt" Title="Next Run" Format="g" />
+      <TemplateColumn T="ScheduledTaskDto" Title="Targets" Sortable="false">
+        <CellTemplate>
+          @{
+            var task = context.Item;
+            var total = task.TargetDeviceIds.Count + task.TargetGroupIds.Count;
+          }
+          <MudText Typo="Typo.body2">@total target(s)</MudText>
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="ScheduledTaskDto" Title="Actions" Sortable="false">
+        <CellTemplate>
+          @{
+            var taskItem = context.Item;
+          }
+          <MudStack Row>
+            <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Color="Color.Success"
+              Size="Size.Small" OnClick="@(() => TriggerTask(taskItem))" />
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary"
+              Size="Size.Small" OnClick="@(() => OpenEditDialog(taskItem))" />
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+              Size="Size.Small" OnClick="@(() => DeleteTask(taskItem))" />
+          </MudStack>
+        </CellTemplate>
+      </TemplateColumn>
+    </Columns>
+  </MudDataGrid>
+}
+
+@code {
+  private List<ScheduledTaskDto> _tasks = [];
+  private bool _loading = true;
+
+  protected override async Task OnInitializedAsync()
+  {
+    await RefreshTasks();
+  }
+
+  private async Task RefreshTasks()
+  {
+    _loading = true;
+    StateHasChanged();
+
+    var result = await ControlrApi.GetAllScheduledTasks();
+    if (result.IsSuccess)
+    {
+      _tasks = result.Value.ToList();
+    }
+
+    _loading = false;
+    StateHasChanged();
+  }
+
+  private async Task OpenCreateDialog()
+  {
+    var parameters = new DialogParameters<ScheduledTaskEditDialog>();
+    var dialog = await DialogService.ShowAsync<ScheduledTaskEditDialog>("New Scheduled Task", parameters,
+      new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+    var result = await dialog.Result;
+
+    if (result is { Canceled: false })
+    {
+      await RefreshTasks();
+    }
+  }
+
+  private async Task OpenEditDialog(ScheduledTaskDto task)
+  {
+    var parameters = new DialogParameters<ScheduledTaskEditDialog>
+    {
+      { x => x.ExistingTask, task },
+    };
+
+    var dialog = await DialogService.ShowAsync<ScheduledTaskEditDialog>("Edit Scheduled Task", parameters,
+      new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+    var result = await dialog.Result;
+
+    if (result is { Canceled: false })
+    {
+      await RefreshTasks();
+    }
+  }
+
+  private async Task TriggerTask(ScheduledTaskDto task)
+  {
+    var confirmed = await DialogService.ShowMessageBox(
+      "Trigger Task",
+      $"Run '{task.Name}' now?",
+      yesText: "Run",
+      cancelText: "Cancel");
+
+    if (confirmed != true)
+    {
+      return;
+    }
+
+    var result = await ControlrApi.TriggerScheduledTask(task.Id);
+    if (!result.IsSuccess)
+    {
+      Snackbar.Add(result.Reason, Severity.Error);
+      return;
+    }
+
+    Snackbar.Add("Task triggered", Severity.Success);
+    await RefreshTasks();
+  }
+
+  private async Task DeleteTask(ScheduledTaskDto task)
+  {
+    var confirmed = await DialogService.ShowMessageBox(
+      "Delete Task",
+      $"Are you sure you want to delete '{task.Name}'?",
+      yesText: "Delete",
+      cancelText: "Cancel");
+
+    if (confirmed != true)
+    {
+      return;
+    }
+
+    var deleteResult = await ControlrApi.DeleteScheduledTask(task.Id);
+    if (!deleteResult.IsSuccess)
+    {
+      Snackbar.Add(deleteResult.Reason, Severity.Error);
+      return;
+    }
+
+    Snackbar.Add("Task deleted", Severity.Success);
+    await RefreshTasks();
+  }
+}

@@ -103,6 +103,7 @@ internal static class HostApplicationBuilderExtensions
     services.AddSingleton<ITerminalStore, TerminalStore>();
     services.AddSingleton<IIpcServerStore, IpcServerStore>();
     services.AddSingleton<IIpcClientAuthenticator, IpcClientAuthenticator>();
+    services.AddSingleton<IScriptRunner, ScriptRunner>();
     services.AddSingleton<IDesktopClientUpdater, DesktopClientUpdater>();
     services.AddSingleton<IAgentHeartbeatTimer, AgentHeartbeatTimer>();
     services.AddSingleton<IFileSystemPathProvider, FileSystemPathProvider>();

@@ -6,8 +6,11 @@ namespace ControlR.Web.Client.Services;
 public interface ITenantSettingsProvider
 {
   Task<bool?> GetNotifyUserOnSessionStart();
+  Task<bool> GetRequireTotp();
   Task SetNotifyUserOnSessionStart(bool? value);
+  Task SetRequireTotp(bool value);
 }
+
 
 internal class TenantSettingsProvider(
   IControlrApi controlrApi,
@@ -25,9 +28,19 @@ internal class TenantSettingsProvider(
     return await GetSetting(TenantSettingsNames.NotifyUserOnSessionStart, (bool?)null);
   }
 
+  public async Task<bool> GetRequireTotp()
+  {
+    return await GetSetting(TenantSettingsNames.RequireTotp, false);
+  }
+
   public async Task SetNotifyUserOnSessionStart(bool? value)
   {
     await SetSetting(TenantSettingsNames.NotifyUserOnSessionStart, value);
+  }
+
+  public async Task SetRequireTotp(bool value)
+  {
+    await SetSetting(TenantSettingsNames.RequireTotp, value);
   }
 
   private async Task<T> GetSetting<T>(string settingName, T defaultValue)

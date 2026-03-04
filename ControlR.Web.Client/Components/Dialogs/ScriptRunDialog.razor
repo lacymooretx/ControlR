@@ -1,0 +1,115 @@
+@inject ISnackbar Snackbar
+@inject IDeviceStore DeviceStore
+@inject IHubConnection<IViewerHub> ViewerHub
+@inject NavigationManager NavMan
+
+<MudDialog>
+  <DialogContent>
+    <MudText Typo="Typo.subtitle1" Class="mb-2">
+      Script: <strong>@Script.Name</strong> (@Script.ScriptType)
+    </MudText>
+
+    <MudText Typo="Typo.body2" Class="mb-3">
+      Select target devices to run this script on:
+    </MudText>
+
+    <MudTextField @bind-Value="_deviceFilter" Label="Filter devices" Adornment="Adornment.Start"
+      AdornmentIcon="@Icons.Material.Filled.Search" Immediate DebounceInterval="300" Class="mb-3" />
+
+    <MudPaper Style="max-height: 300px; overflow-y: auto;" Class="pa-2">
+      @foreach (var device in FilteredDevices)
+      {
+        <MudCheckBox T="bool" Value="@_selectedDeviceIds.Contains(device.Id)"
+          ValueChanged="@(v => ToggleDevice(device.Id, v))"
+          Label="@GetDeviceLabel(device)"
+          Disabled="@(!device.IsOnline)"
+          Color="Color.Primary" Dense />
+      }
+    </MudPaper>
+
+    @if (_selectedDeviceIds.Count > 0)
+    {
+      <MudText Typo="Typo.caption" Class="mt-2">
+        @_selectedDeviceIds.Count device(s) selected
+      </MudText>
+    }
+  </DialogContent>
+  <DialogActions>
+    <MudButton OnClick="Cancel">Cancel</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="ExecuteScript"
+      Disabled="@(_executing || _selectedDeviceIds.Count == 0)"
+      StartIcon="@Icons.Material.Filled.PlayArrow">
+      @if (_executing)
+      {
+        <MudProgressCircular Indeterminate Size="Size.Small" Class="mr-2" />
+      }
+      Run
+    </MudButton>
+  </DialogActions>
+</MudDialog>
+
+@code {
+  [CascadingParameter]
+  private IMudDialogInstance MudDialog { get; set; } = null!;
+
+  [Parameter]
+  public SavedScriptDto Script { get; set; } = null!;
+
+  private HashSet<Guid> _selectedDeviceIds = [];
+  private string _deviceFilter = string.Empty;
+  private bool _executing;
+
+  private IEnumerable<DeviceResponseDto> FilteredDevices =>
+    DeviceStore.Items
+      .Where(d => string.IsNullOrWhiteSpace(_deviceFilter) ||
+                  d.Name.Contains(_deviceFilter, StringComparison.OrdinalIgnoreCase))
+      .OrderByDescending(d => d.IsOnline)
+      .ThenBy(d => d.Name);
+
+  protected override async Task OnInitializedAsync()
+  {
+    await DeviceStore.Refresh();
+  }
+
+  private void ToggleDevice(Guid deviceId, bool selected)
+  {
+    if (selected)
+    {
+      _selectedDeviceIds.Add(deviceId);
+    }
+    else
+    {
+      _selectedDeviceIds.Remove(deviceId);
+    }
+  }
+
+  private static string GetDeviceLabel(DeviceResponseDto device) =>
+    $"{device.Name} ({(device.IsOnline ? "Online" : "Offline")})";
+
+  private void Cancel() => MudDialog.Cancel();
+
+  private async Task ExecuteScript()
+  {
+    _executing = true;
+
+    var request = new ExecuteScriptRequestDto(
+      Script.Id,
+      null,
+      Script.ScriptType,
+      _selectedDeviceIds.ToList().AsReadOnly());
+
+    var result = await ViewerHub.Server.ExecuteScript(request);
+    if (!result.IsSuccess)
+    {
+      Snackbar.Add(result.Reason, Severity.Error);
+      _executing = false;
+      return;
+    }
+
+    Snackbar.Add("Script execution started", Severity.Success);
+    _executing = false;
+    MudDialog.Close(DialogResult.Ok(true));
+
+    NavMan.NavigateTo($"{ClientRoutes.ScriptExecution}/{result.Value.Id}");
+  }
+}

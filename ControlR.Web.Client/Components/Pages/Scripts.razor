@@ -1,0 +1,242 @@
+@page "/scripts"
+@attribute [Authorize]
+@inject IControlrApi ControlrApi
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager NavMan
+
+<MudText Typo="Typo.h4" Color="Color.Primary" GutterBottom>
+  Scripts
+</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+  <MudStack Row AlignItems="AlignItems.Center">
+    <AuthorizeView Roles="@RoleNames.TenantAdministrator">
+      <MudButton Variant="Variant.Filled" Color="Color.Primary"
+        StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+        New Script
+      </MudButton>
+    </AuthorizeView>
+    <MudButton Variant="Variant.Outlined" Color="Color.Info"
+      StartIcon="@Icons.Material.Filled.PlayArrow" OnClick="OpenExecuteDialog"
+      Disabled="@(_selectedScript is null)">
+      Run Script
+    </MudButton>
+    <MudSpacer />
+    <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Info"
+      OnClick="RefreshScripts" />
+  </MudStack>
+</MudPaper>
+
+@if (_loading)
+{
+  <MudProgressLinear Indeterminate Color="Color.Primary" />
+}
+else if (_scripts.Count == 0)
+{
+  <MudAlert Severity="Severity.Info">
+    No scripts available.
+  </MudAlert>
+}
+else
+{
+  <MudDataGrid T="SavedScriptDto" Items="_scripts" SortMode="SortMode.Single"
+    Filterable="false" Hideable="false" SelectedItemChanged="OnScriptSelected">
+    <Columns>
+      <PropertyColumn Property="x => x.Name" Title="Name" />
+      <PropertyColumn Property="x => x.ScriptType" Title="Type" />
+      <PropertyColumn Property="x => x.Description" Title="Description" />
+      <PropertyColumn Property="x => x.IsPublishedToClients" Title="Published" />
+      <TemplateColumn T="SavedScriptDto" Title="Actions" Sortable="false">
+        <CellTemplate>
+          @{
+            var script = context.Item;
+          }
+          <MudStack Row>
+            <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Color="Color.Success"
+              Size="Size.Small" OnClick="@(() => OpenExecuteDialogFor(script))" />
+            <AuthorizeView Roles="@RoleNames.TenantAdministrator" Context="authContext">
+              <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary"
+                Size="Size.Small" OnClick="@(() => OpenEditDialog(script))" />
+              <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+                Size="Size.Small" OnClick="@(() => DeleteScript(script))" />
+            </AuthorizeView>
+          </MudStack>
+        </CellTemplate>
+      </TemplateColumn>
+    </Columns>
+  </MudDataGrid>
+}
+
+<MudDivider Class="my-4" />
+
+<MudText Typo="Typo.h5" Color="Color.Primary" GutterBottom>
+  Recent Executions
+</MudText>
+
+@if (_executions.Count > 0)
+{
+  <MudDataGrid T="ScriptExecutionDto" Items="_executions" SortMode="SortMode.Single"
+    Filterable="false" Hideable="false">
+    <Columns>
+      <TemplateColumn T="ScriptExecutionDto" Title="Script" Sortable="false">
+        <CellTemplate>
+          @(context.Item.ScriptName ?? "Ad-hoc")
+        </CellTemplate>
+      </TemplateColumn>
+      <PropertyColumn Property="x => x.ScriptType" Title="Type" />
+      <PropertyColumn Property="x => x.Status" Title="Status" />
+      <PropertyColumn Property="x => x.StartedAt" Title="Started" Format="g" />
+      <TemplateColumn T="ScriptExecutionDto" Title="Results" Sortable="false">
+        <CellTemplate>
+          @{
+            var completed = context.Item.Results.Count(r => r.Status is "Completed");
+            var failed = context.Item.Results.Count(r => r.Status is "Failed" or "TimedOut");
+            var pending = context.Item.Results.Count(r => r.Status is "Pending" or "Running");
+          }
+          <MudStack Row Spacing="1">
+            @if (completed > 0)
+            {
+              <MudChip T="string" Size="Size.Small" Color="Color.Success">@completed OK</MudChip>
+            }
+            @if (failed > 0)
+            {
+              <MudChip T="string" Size="Size.Small" Color="Color.Error">@failed Failed</MudChip>
+            }
+            @if (pending > 0)
+            {
+              <MudChip T="string" Size="Size.Small" Color="Color.Warning">@pending Pending</MudChip>
+            }
+          </MudStack>
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="ScriptExecutionDto" Title="Details" Sortable="false">
+        <CellTemplate>
+          <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info"
+            Size="Size.Small" OnClick="@(() => NavMan.NavigateTo($"{ClientRoutes.ScriptExecution}/{context.Item.Id}"))" />
+        </CellTemplate>
+      </TemplateColumn>
+    </Columns>
+  </MudDataGrid>
+}
+else
+{
+  <MudAlert Severity="Severity.Info">No recent executions.</MudAlert>
+}
+
+@code {
+  private List<SavedScriptDto> _scripts = [];
+  private List<ScriptExecutionDto> _executions = [];
+  private SavedScriptDto? _selectedScript;
+  private bool _loading = true;
+
+  protected override async Task OnInitializedAsync()
+  {
+    await RefreshScripts();
+  }
+
+  private void OnScriptSelected(SavedScriptDto? script)
+  {
+    _selectedScript = script;
+  }
+
+  private async Task RefreshScripts()
+  {
+    _loading = true;
+    StateHasChanged();
+
+    var scriptsResult = await ControlrApi.GetAllScripts();
+    if (scriptsResult.IsSuccess)
+    {
+      _scripts = scriptsResult.Value.ToList();
+    }
+
+    var execResult = await ControlrApi.GetRecentScriptExecutions(20);
+    if (execResult.IsSuccess)
+    {
+      _executions = execResult.Value.ToList();
+    }
+
+    _loading = false;
+    StateHasChanged();
+  }
+
+  private async Task OpenCreateDialog()
+  {
+    var parameters = new DialogParameters<ScriptEditDialog>();
+    var dialog = await DialogService.ShowAsync<ScriptEditDialog>("New Script", parameters,
+      new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+    var result = await dialog.Result;
+
+    if (result is { Canceled: false })
+    {
+      await RefreshScripts();
+    }
+  }
+
+  private async Task OpenEditDialog(SavedScriptDto script)
+  {
+    var parameters = new DialogParameters<ScriptEditDialog>
+    {
+      { x => x.ExistingScript, script },
+    };
+
+    var dialog = await DialogService.ShowAsync<ScriptEditDialog>("Edit Script", parameters,
+      new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+    var result = await dialog.Result;
+
+    if (result is { Canceled: false })
+    {
+      await RefreshScripts();
+    }
+  }
+
+  private async Task OpenExecuteDialog()
+  {
+    if (_selectedScript is not null)
+    {
+      await OpenExecuteDialogFor(_selectedScript);
+    }
+  }
+
+  private async Task OpenExecuteDialogFor(SavedScriptDto script)
+  {
+    var parameters = new DialogParameters<ScriptRunDialog>
+    {
+      { x => x.Script, script },
+    };
+
+    var dialog = await DialogService.ShowAsync<ScriptRunDialog>("Run Script", parameters,
+      new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+    var result = await dialog.Result;
+
+    if (result is { Canceled: false })
+    {
+      await RefreshScripts();
+    }
+  }
+
+  private async Task DeleteScript(SavedScriptDto script)
+  {
+    var confirmed = await DialogService.ShowMessageBox(
+      "Delete Script",
+      $"Are you sure you want to delete '{script.Name}'?",
+      yesText: "Delete",
+      cancelText: "Cancel");
+
+    if (confirmed != true)
+    {
+      return;
+    }
+
+    var deleteResult = await ControlrApi.DeleteScript(script.Id);
+    if (!deleteResult.IsSuccess)
+    {
+      Snackbar.Add(deleteResult.Reason, Severity.Error);
+      return;
+    }
+
+    Snackbar.Add("Script deleted", Severity.Success);
+    await RefreshScripts();
+  }
+}

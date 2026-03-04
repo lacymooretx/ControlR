@@ -43,6 +43,13 @@ public static class RoleFactory
         Name = RoleNames.InstallerKeyManager,
         NormalizedName = RoleNames.InstallerKeyManager.ToUpper(),
         ConcurrencyStamp = "a7e1a339-19c3-4d44-97e3-239636906a45",
+      },
+      new AppRole
+      {
+        Id = DeterministicGuid.Create(6),
+        Name = RoleNames.ClientUser,
+        NormalizedName = RoleNames.ClientUser.ToUpper(),
+        ConcurrencyStamp = "e4f8c2a1-7b3d-4e6f-9a1c-5d2b8e4f7a3c",
       }
     ];
   }

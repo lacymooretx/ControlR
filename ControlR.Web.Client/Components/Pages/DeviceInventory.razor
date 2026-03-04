@@ -1,0 +1,196 @@
+@page "/device-inventory/{DeviceId:guid}"
+@attribute [Authorize]
+@inject IControlrApi ControlrApi
+@inject ISnackbar Snackbar
+
+<MudText Typo="Typo.h4" Color="Color.Primary" GutterBottom>
+  Device Inventory
+  @if (_device is not null)
+  {
+    <MudText Typo="Typo.subtitle1">@_device.Name</MudText>
+  }
+</MudText>
+
+@if (_loading)
+{
+  <MudProgressLinear Indeterminate Color="Color.Primary" />
+}
+else
+{
+  <MudTabs Elevation="2" Rounded ApplyEffectsToContainer Class="mb-4">
+    <MudTabPanel Text="Hardware">
+      @if (_hardware is not null)
+      {
+        <MudPaper Class="pa-4">
+          <MudSimpleTable Dense Striped>
+            <tbody>
+              <tr>
+                <td><strong>Manufacturer</strong></td>
+                <td>@_hardware.Manufacturer</td>
+              </tr>
+              <tr>
+                <td><strong>Model</strong></td>
+                <td>@_hardware.Model</td>
+              </tr>
+              <tr>
+                <td><strong>Serial Number</strong></td>
+                <td>@_hardware.SerialNumber</td>
+              </tr>
+              <tr>
+                <td><strong>BIOS Version</strong></td>
+                <td>@_hardware.BiosVersion</td>
+              </tr>
+              @if (_device is not null)
+              {
+                <tr>
+                  <td><strong>OS</strong></td>
+                  <td>@_device.OsDescription</td>
+                </tr>
+                <tr>
+                  <td><strong>Architecture</strong></td>
+                  <td>@_device.OsArchitecture</td>
+                </tr>
+                <tr>
+                  <td><strong>Processors</strong></td>
+                  <td>@_device.ProcessorCount</td>
+                </tr>
+                <tr>
+                  <td><strong>Total Memory</strong></td>
+                  <td>@FormatBytes(_device.TotalMemory)</td>
+                </tr>
+                <tr>
+                  <td><strong>Total Storage</strong></td>
+                  <td>@FormatBytes(_device.TotalStorage)</td>
+                </tr>
+              }
+            </tbody>
+          </MudSimpleTable>
+        </MudPaper>
+      }
+      else
+      {
+        <MudAlert Severity="Severity.Info" Class="ma-4">
+          No hardware information available. Run an inventory scan to collect data.
+        </MudAlert>
+      }
+    </MudTabPanel>
+
+    <MudTabPanel Text="@($"Software ({_software.Count})")">
+      @if (_software.Count > 0)
+      {
+        <MudTextField @bind-Value="_softwareFilter" Label="Filter software"
+          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+          Immediate DebounceInterval="300" Class="pa-4" />
+
+        <MudDataGrid T="SoftwareInventoryItemDto" Items="FilteredSoftware"
+          SortMode="SortMode.Single" Filterable="false" Hideable="false" Dense>
+          <Columns>
+            <PropertyColumn Property="x => x.Name" Title="Name" />
+            <PropertyColumn Property="x => x.Version" Title="Version" />
+            <PropertyColumn Property="x => x.Publisher" Title="Publisher" />
+            <TemplateColumn T="SoftwareInventoryItemDto" Title="Install Date" SortBy="x => x.InstallDate">
+              <CellTemplate>
+                @(context.Item.InstallDate?.LocalDateTime.ToString("d") ?? "Unknown")
+              </CellTemplate>
+            </TemplateColumn>
+          </Columns>
+        </MudDataGrid>
+      }
+      else
+      {
+        <MudAlert Severity="Severity.Info" Class="ma-4">
+          No software inventory available.
+        </MudAlert>
+      }
+    </MudTabPanel>
+
+    <MudTabPanel Text="@($"Updates ({_updates.Count})")">
+      @if (_updates.Count > 0)
+      {
+        <MudDataGrid T="InstalledUpdateDto" Items="_updates"
+          SortMode="SortMode.Single" Filterable="false" Hideable="false" Dense>
+          <Columns>
+            <PropertyColumn Property="x => x.UpdateId" Title="Update ID" />
+            <PropertyColumn Property="x => x.Title" Title="Title" />
+            <TemplateColumn T="InstalledUpdateDto" Title="Installed On" SortBy="x => x.InstalledOn">
+              <CellTemplate>
+                @(context.Item.InstalledOn?.LocalDateTime.ToString("d") ?? "Unknown")
+              </CellTemplate>
+            </TemplateColumn>
+          </Columns>
+        </MudDataGrid>
+      }
+      else
+      {
+        <MudAlert Severity="Severity.Info" Class="ma-4">
+          No update information available.
+        </MudAlert>
+      }
+    </MudTabPanel>
+  </MudTabs>
+}
+
+@code {
+  [Parameter]
+  public Guid DeviceId { get; set; }
+
+  private bool _loading = true;
+  private string _softwareFilter = string.Empty;
+  private DeviceResponseDto? _device;
+  private DeviceHardwareDto? _hardware;
+  private List<SoftwareInventoryItemDto> _software = [];
+  private List<InstalledUpdateDto> _updates = [];
+
+  private IEnumerable<SoftwareInventoryItemDto> FilteredSoftware =>
+    _software.Where(s => string.IsNullOrWhiteSpace(_softwareFilter) ||
+      s.Name.Contains(_softwareFilter, StringComparison.OrdinalIgnoreCase) ||
+      s.Publisher.Contains(_softwareFilter, StringComparison.OrdinalIgnoreCase));
+
+  protected override async Task OnInitializedAsync()
+  {
+    var deviceTask = ControlrApi.GetDevice(DeviceId);
+    var hardwareTask = ControlrApi.GetDeviceHardware(DeviceId);
+    var softwareTask = ControlrApi.GetDeviceSoftware(DeviceId);
+    var updatesTask = ControlrApi.GetDeviceUpdates(DeviceId);
+
+    await Task.WhenAll(deviceTask, hardwareTask, softwareTask, updatesTask);
+
+    var deviceResult = await deviceTask;
+    if (deviceResult.IsSuccess)
+    {
+      _device = deviceResult.Value;
+    }
+
+    var hardwareResult = await hardwareTask;
+    if (hardwareResult.IsSuccess)
+    {
+      _hardware = hardwareResult.Value;
+    }
+
+    var softwareResult = await softwareTask;
+    if (softwareResult.IsSuccess)
+    {
+      _software = softwareResult.Value.ToList();
+    }
+
+    var updatesResult = await updatesTask;
+    if (updatesResult.IsSuccess)
+    {
+      _updates = updatesResult.Value.ToList();
+    }
+
+    _loading = false;
+  }
+
+  private static string FormatBytes(double bytes)
+  {
+    string[] sizes = ["B", "KB", "MB", "GB", "TB"];
+    var order = 0;
+    while (bytes >= 1024 && order < sizes.Length - 1)
+    {
+      order++;
+      bytes /= 1024;
+    }
+    return $"{bytes:0.##} {sizes[order]}";
+  }
+}

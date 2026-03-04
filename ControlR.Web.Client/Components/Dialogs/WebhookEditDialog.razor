@@ -1,0 +1,147 @@
+@inject IControlrApi ControlrApi
+@inject ISnackbar Snackbar
+
+<MudDialog>
+  <DialogContent>
+    <MudTextField @bind-Value="_name" Label="Name" Required />
+    <MudTextField @bind-Value="_url" Label="URL" Required Class="mt-2"
+      HelperText="HTTPS endpoint that will receive webhook payloads" />
+    <MudTextField @bind-Value="_secret" Label="Secret" Class="mt-2"
+      InputType="InputType.Password"
+      HelperText="@(Webhook is null ? "Used to sign payloads with HMAC-SHA256" : "Leave empty to keep existing secret")" />
+
+    <MudText Typo="Typo.subtitle2" Class="mt-4 mb-2">Event Types</MudText>
+    <MudPaper Style="max-height: 250px; overflow-y: auto;" Class="pa-2">
+      @foreach (var eventType in _availableEventTypes)
+      {
+        <MudCheckBox T="bool" Value="@_selectedEventTypes.Contains(eventType)"
+          ValueChanged="@(v => ToggleEventType(eventType, v))"
+          Label="@eventType"
+          Color="Color.Primary" Dense />
+      }
+    </MudPaper>
+
+    @if (Webhook is not null)
+    {
+      <MudSwitch T="bool" @bind-Value="_isEnabled" Label="Enabled" Color="Color.Success" Class="mt-3" />
+    }
+  </DialogContent>
+  <DialogActions>
+    <MudButton OnClick="Cancel">Cancel</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save"
+      Disabled="@(_saving || string.IsNullOrWhiteSpace(_name) || string.IsNullOrWhiteSpace(_url) || _selectedEventTypes.Count == 0)">
+      @if (_saving)
+      {
+        <MudProgressCircular Indeterminate Size="Size.Small" Class="mr-2" />
+      }
+      Save
+    </MudButton>
+  </DialogActions>
+</MudDialog>
+
+@code {
+  private static readonly string[] _availableEventTypes =
+  [
+    "alert.triggered",
+    "alert.resolved",
+    "device.online",
+    "device.offline",
+    "device.power.shutdown",
+    "device.power.restart",
+    "file.uploaded",
+    "file.downloaded",
+    "script.execution.completed",
+    "script.execution.failed",
+    "session.remote_control.start",
+    "session.remote_control.end",
+    "session.terminal.start",
+    "session.terminal.end",
+    "webhook.test",
+  ];
+
+  [CascadingParameter]
+  private IMudDialogInstance MudDialog { get; set; } = null!;
+
+  [Parameter]
+  public WebhookSubscriptionDto? Webhook { get; set; }
+
+  private bool _isEnabled = true;
+  private string _name = string.Empty;
+  private bool _saving;
+  private string _secret = string.Empty;
+  private HashSet<string> _selectedEventTypes = [];
+  private string _url = string.Empty;
+
+  protected override void OnInitialized()
+  {
+    if (Webhook is not null)
+    {
+      _isEnabled = Webhook.IsEnabled;
+      _name = Webhook.Name;
+      _selectedEventTypes = new HashSet<string>(Webhook.EventTypes);
+      _url = Webhook.Url;
+    }
+  }
+
+  private void Cancel() => MudDialog.Cancel();
+
+  private async Task Save()
+  {
+    _saving = true;
+
+    if (Webhook is null)
+    {
+      if (string.IsNullOrWhiteSpace(_secret))
+      {
+        Snackbar.Add("Secret is required for new webhooks.", Severity.Warning);
+        _saving = false;
+        return;
+      }
+
+      var request = new WebhookCreateRequestDto(
+        _name,
+        _url,
+        _secret,
+        _selectedEventTypes.ToArray());
+
+      var result = await ControlrApi.CreateWebhook(request);
+      if (!result.IsSuccess)
+      {
+        Snackbar.Add(result.Reason, Severity.Error);
+        _saving = false;
+        return;
+      }
+
+      Snackbar.Add("Webhook created", Severity.Success);
+    }
+    else
+    {
+      var request = new WebhookUpdateRequestDto(
+        Webhook.Id,
+        _name,
+        _url,
+        string.IsNullOrWhiteSpace(_secret) ? null : _secret,
+        _selectedEventTypes.ToArray(),
+        _isEnabled);
+
+      var result = await ControlrApi.UpdateWebhook(request);
+      if (!result.IsSuccess)
+      {
+        Snackbar.Add(result.Reason, Severity.Error);
+        _saving = false;
+        return;
+      }
+
+      Snackbar.Add("Webhook updated", Severity.Success);
+    }
+
+    _saving = false;
+    MudDialog.Close(DialogResult.Ok(true));
+  }
+
+  private void ToggleEventType(string eventType, bool selected)
+  {
+    if (selected) _selectedEventTypes.Add(eventType);
+    else _selectedEventTypes.Remove(eventType);
+  }
+}

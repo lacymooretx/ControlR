@@ -1,0 +1,107 @@
+@inject IControlrApi ControlrApi
+@inject ISnackbar Snackbar
+
+<MudDialog>
+  <DialogContent>
+    <MudForm @ref="_form">
+      <MudTextField @bind-Value="_name" Label="Name" Required RequiredError="Name is required"
+        MaxLength="100" />
+      <MudSelect @bind-Value="_groupType" Label="Group Type">
+        <MudSelectItem Value="@("Site")">Site</MudSelectItem>
+        <MudSelectItem Value="@("Location")">Location</MudSelectItem>
+        <MudSelectItem Value="@("Department")">Department</MudSelectItem>
+        <MudSelectItem Value="@("Custom")">Custom</MudSelectItem>
+      </MudSelect>
+      <MudTextField @bind-Value="_description" Label="Description" Lines="2"
+        MaxLength="500" />
+      <MudSelect @bind-Value="_parentGroupId" Label="Parent Group" Clearable>
+        @foreach (var group in AvailableParents)
+        {
+          <MudSelectItem Value="@((Guid?)group.Id)">@group.Name</MudSelectItem>
+        }
+      </MudSelect>
+      <MudNumericField @bind-Value="_sortOrder" Label="Sort Order" Min="0" />
+    </MudForm>
+  </DialogContent>
+  <DialogActions>
+    <MudButton OnClick="Cancel">Cancel</MudButton>
+    <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit">
+      @(ExistingGroup is null ? "Create" : "Save")
+    </MudButton>
+  </DialogActions>
+</MudDialog>
+
+@code {
+  [CascadingParameter]
+  private IMudDialogInstance MudDialog { get; set; } = null!;
+
+  [Parameter]
+  public DeviceGroupDto? ExistingGroup { get; set; }
+
+  [Parameter]
+  public List<DeviceGroupDto> ExistingGroups { get; set; } = [];
+
+  private MudForm _form = null!;
+  private string _name = string.Empty;
+  private string _groupType = "Custom";
+  private string _description = string.Empty;
+  private Guid? _parentGroupId;
+  private int _sortOrder;
+
+  private IEnumerable<DeviceGroupDto> AvailableParents =>
+    ExistingGroups.Where(g => ExistingGroup is null || g.Id != ExistingGroup.Id);
+
+  protected override void OnInitialized()
+  {
+    if (ExistingGroup is not null)
+    {
+      _name = ExistingGroup.Name;
+      _groupType = ExistingGroup.GroupType;
+      _description = ExistingGroup.Description;
+      _parentGroupId = ExistingGroup.ParentGroupId;
+      _sortOrder = ExistingGroup.SortOrder;
+    }
+  }
+
+  private void Cancel() => MudDialog.Cancel();
+
+  private async Task Submit()
+  {
+    await _form.Validate();
+    if (!_form.IsValid)
+    {
+      return;
+    }
+
+    if (ExistingGroup is null)
+    {
+      var request = new DeviceGroupCreateRequestDto(
+        _name, _groupType, _description, _parentGroupId, _sortOrder);
+
+      var result = await ControlrApi.CreateDeviceGroup(request);
+      if (!result.IsSuccess)
+      {
+        Snackbar.Add(result.Reason, Severity.Error);
+        return;
+      }
+
+      Snackbar.Add("Device group created", Severity.Success);
+    }
+    else
+    {
+      var request = new DeviceGroupUpdateRequestDto(
+        ExistingGroup.Id, _name, _groupType, _description, _parentGroupId, _sortOrder);
+
+      var result = await ControlrApi.UpdateDeviceGroup(request);
+      if (!result.IsSuccess)
+      {
+        Snackbar.Add(result.Reason, Severity.Error);
+        return;
+      }
+
+      Snackbar.Add("Device group updated", Severity.Success);
+    }
+
+    MudDialog.Close(DialogResult.Ok(true));
+  }
+}

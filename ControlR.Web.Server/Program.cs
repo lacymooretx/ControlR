@@ -8,6 +8,7 @@ using Microsoft.Extensions.FileProviders;
 using Scalar.AspNetCore;
 using System.Reflection;
 using ControlR.Libraries.Shared.Constants;
+using ControlR.Web.Server.Middleware;
 
 var isOpenApiBuild = Assembly.GetEntryAssembly()?.GetName().Name == "GetDocument.Insider";
 var builder = WebApplication.CreateBuilder(args);
@@ -64,6 +65,7 @@ app.MapHub<AgentHub>(AppConstants.AgentHubPath);
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<TotpEnforcementMiddleware>();
 app.UseAntiforgery();
 
 app.MapWebSocketRelay();

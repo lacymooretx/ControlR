@@ -3,6 +3,7 @@
 public static class RoleNames
 {
   public const string AgentInstaller = "Agent Installer";
+  public const string ClientUser = "Client User";
   public const string DeviceSuperUser = "Device Superuser";
   public const string InstallerKeyManager = "Installer Key Manager";
   public const string ServerAdministrator = "Server Administrator";

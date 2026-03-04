@@ -1,0 +1,116 @@
+@inject IControlrApi ControlrApi
+@inject ISnackbar Snackbar
+
+<MudDialog>
+  <DialogContent>
+    <MudForm @ref="_form">
+      <MudTextField @bind-Value="_name" Label="Name" Required RequiredError="Name is required"
+        Class="mb-3" />
+      <MudTextField @bind-Value="_description" Label="Description" Lines="2" Class="mb-3" />
+      <MudSelect @bind-Value="_scriptType" Label="Script Type" Required Class="mb-3">
+        <MudSelectItem Value="@("PowerShell")">PowerShell</MudSelectItem>
+        <MudSelectItem Value="@("Bash")">Bash</MudSelectItem>
+        <MudSelectItem Value="@("Cmd")">Cmd</MudSelectItem>
+      </MudSelect>
+      <MudTextField @bind-Value="_scriptContent" Label="Script Content" Lines="12" Required
+        RequiredError="Script content is required" Class="mb-3"
+        Style="font-family: monospace;" />
+      <MudSwitch @bind-Value="_isPublishedToClients" Label="Published to Clients" Color="Color.Primary" />
+    </MudForm>
+  </DialogContent>
+  <DialogActions>
+    <MudButton OnClick="Cancel">Cancel</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save"
+      Disabled="_saving">
+      @if (_saving)
+      {
+        <MudProgressCircular Indeterminate Size="Size.Small" Class="mr-2" />
+      }
+      Save
+    </MudButton>
+  </DialogActions>
+</MudDialog>
+
+@code {
+  [CascadingParameter]
+  private IMudDialogInstance MudDialog { get; set; } = null!;
+
+  [Parameter]
+  public SavedScriptDto? ExistingScript { get; set; }
+
+  private MudForm _form = null!;
+  private string _name = string.Empty;
+  private string _description = string.Empty;
+  private string _scriptType = "PowerShell";
+  private string _scriptContent = string.Empty;
+  private bool _isPublishedToClients;
+  private bool _saving;
+
+  protected override void OnInitialized()
+  {
+    if (ExistingScript is not null)
+    {
+      _name = ExistingScript.Name;
+      _description = ExistingScript.Description;
+      _scriptType = ExistingScript.ScriptType;
+      _scriptContent = ExistingScript.ScriptContent;
+      _isPublishedToClients = ExistingScript.IsPublishedToClients;
+    }
+  }
+
+  private void Cancel() => MudDialog.Cancel();
+
+  private async Task Save()
+  {
+    await _form.Validate();
+    if (!_form.IsValid)
+    {
+      return;
+    }
+
+    _saving = true;
+
+    if (ExistingScript is not null)
+    {
+      var request = new SavedScriptUpdateRequestDto(
+        ExistingScript.Id,
+        _name,
+        _description,
+        _scriptContent,
+        _scriptType,
+        _isPublishedToClients);
+
+      var result = await ControlrApi.UpdateScript(request);
+      if (!result.IsSuccess)
+      {
+        Snackbar.Add(result.Reason, Severity.Error);
+        _saving = false;
+        return;
+      }
+
+      Snackbar.Add("Script updated", Severity.Success);
+    }
+    else
+    {
+      var request = new SavedScriptCreateRequestDto(
+        _name,
+        _description,
+        _scriptContent,
+        _scriptType,
+        _isPublishedToClients);
+
+      var result = await ControlrApi.CreateScript(request);
+      if (!result.IsSuccess)
+      {
+        Snackbar.Add(result.Reason, Severity.Error);
+        _saving = false;
+        return;
+      }
+
+      Snackbar.Add("Script created", Severity.Success);
+    }
+
+    _saving = false;
+    MudDialog.Close(DialogResult.Ok(true));
+  }
+}

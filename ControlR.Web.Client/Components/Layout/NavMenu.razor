@@ -11,9 +11,20 @@
   <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">
     Home
   </MudNavLink>
-  <MudNavLink Disabled="!_isAuthenticated" Href="@(ClientRoutes.Deploy)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.RocketLaunch">
-    Deploy
-  </MudNavLink>
+  <AuthorizeView Roles="@RoleNames.ClientUser">
+    <Authorized>
+      <MudNavLink Href="@(ClientRoutes.ClientDashboard)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Devices">
+        My Devices
+      </MudNavLink>
+    </Authorized>
+  </AuthorizeView>
+  <AuthorizeView Roles="@RoleNames.ClientUser">
+    <NotAuthorized>
+      <MudNavLink Disabled="!_isAuthenticated" Href="@(ClientRoutes.Deploy)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.RocketLaunch">
+        Deploy
+      </MudNavLink>
+    </NotAuthorized>
+  </AuthorizeView>
   <AuthorizeView Roles="@($"{RoleNames.TenantAdministrator}, {RoleNames.InstallerKeyManager}")">
     <MudNavLink Disabled="!_isAuthenticated" Href="@(ClientRoutes.InstallerKeys)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.InstallDesktop">
       Installer Keys
@@ -36,6 +47,12 @@
         Tenant Admin
       </MudText>
     </div>
+    <MudNavLink Href="@(ClientRoutes.ClientsManagement)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.People">
+      Client Management
+    </MudNavLink>
+    <MudNavLink Href="@(ClientRoutes.DeviceGroups)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.FolderSpecial">
+      Device Groups
+    </MudNavLink>
     <MudNavLink Href="@(ClientRoutes.Permissions)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.SupervisedUserCircle">
       Permissions
     </MudNavLink>
@@ -44,6 +61,27 @@
     </MudNavLink>
     <MudNavLink Href="@(ClientRoutes.TenantSettings)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings">
       Tenant Settings
+    </MudNavLink>
+    <MudNavLink Href="@(ClientRoutes.Scripts)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Code">
+      Scripts
+    </MudNavLink>
+    <MudNavLink Href="@(ClientRoutes.ScheduledTasks)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Schedule">
+      Scheduled Tasks
+    </MudNavLink>
+    <MudNavLink Href="@(ClientRoutes.Monitoring)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.MonitorHeart">
+      Monitoring
+    </MudNavLink>
+    <MudNavLink Href="@(ClientRoutes.AlertRules)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.NotificationsActive">
+      Alert Rules
+    </MudNavLink>
+    <MudNavLink Href="@(ClientRoutes.AssetManagement)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Inventory">
+      Asset Management
+    </MudNavLink>
+    <MudNavLink Href="@(ClientRoutes.AuditLog)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.History">
+      Audit Log
+    </MudNavLink>
+    <MudNavLink Href="@(ClientRoutes.Webhooks)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Webhook">
+      Webhooks
     </MudNavLink>
   </AuthorizeView>
   <AuthorizeView Roles="@(RoleNames.ServerAdministrator)">

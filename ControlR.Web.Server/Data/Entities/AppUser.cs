@@ -5,6 +5,8 @@ namespace ControlR.Web.Server.Data.Entities;
 
 public class AppUser : IdentityUser<Guid>, ITenantEntityBase
 {
+  public string? CompanyName { get; set; }
+
   [DatabaseGenerated(DatabaseGeneratedOption.Computed)]
   public DateTimeOffset CreatedAt { get; set; }
   public bool IsOnline { get; set; }

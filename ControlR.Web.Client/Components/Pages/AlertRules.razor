@@ -1,0 +1,166 @@
+@page "/alert-rules"
+@attribute [Authorize(Roles = RoleNames.TenantAdministrator)]
+@inject IControlrApi ControlrApi
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudText Typo="Typo.h4" Color="Color.Primary" GutterBottom>
+  Alert Rules
+</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+  <MudStack Row AlignItems="AlignItems.Center">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+      StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+      New Rule
+    </MudButton>
+    <MudSpacer />
+    <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Info"
+      OnClick="RefreshRules" />
+  </MudStack>
+</MudPaper>
+
+@if (_loading)
+{
+  <MudProgressLinear Indeterminate Color="Color.Primary" />
+}
+else if (_rules.Count == 0)
+{
+  <MudAlert Severity="Severity.Info">
+    No alert rules configured. Create a rule to start monitoring device metrics.
+  </MudAlert>
+}
+else
+{
+  <MudDataGrid T="AlertRuleDto" Items="_rules" SortMode="SortMode.Single"
+    Filterable="false" Hideable="false">
+    <Columns>
+      <PropertyColumn Property="x => x.Name" Title="Name" />
+      <PropertyColumn Property="x => x.MetricType" Title="Metric" />
+      <TemplateColumn T="AlertRuleDto" Title="Condition" Sortable="false">
+        <CellTemplate>
+          @($"{context.Item.Operator} {context.Item.ThresholdValue}%")
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="AlertRuleDto" Title="Duration" Sortable="false">
+        <CellTemplate>
+          @($"{context.Item.Duration} min")
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="AlertRuleDto" Title="Enabled" Sortable="false">
+        <CellTemplate>
+          <MudChip T="string" Color="@(context.Item.IsEnabled ? Color.Success : Color.Default)" Size="Size.Small">
+            @(context.Item.IsEnabled ? "Yes" : "No")
+          </MudChip>
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="AlertRuleDto" Title="Targets" Sortable="false">
+        <CellTemplate>
+          @{
+            var count = context.Item.TargetDeviceIds.Count + context.Item.TargetGroupIds.Count;
+          }
+          @(count > 0 ? $"{count} target(s)" : "All devices")
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="AlertRuleDto" Title="Actions" Sortable="false">
+        <CellTemplate>
+          @{
+            var rule = context.Item;
+          }
+          <MudStack Row>
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary"
+              Size="Size.Small" OnClick="@(() => OpenEditDialog(rule))" />
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+              Size="Size.Small" OnClick="@(() => DeleteRule(rule))" />
+          </MudStack>
+        </CellTemplate>
+      </TemplateColumn>
+    </Columns>
+  </MudDataGrid>
+}
+
+@code {
+  private bool _loading = true;
+  private List<AlertRuleDto> _rules = [];
+
+  protected override async Task OnInitializedAsync()
+  {
+    await RefreshRules();
+  }
+
+  private async Task RefreshRules()
+  {
+    _loading = true;
+    StateHasChanged();
+
+    var result = await ControlrApi.GetAllAlertRules();
+    if (result.IsSuccess)
+    {
+      _rules = result.Value.ToList();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to load alert rules: {result.Reason}", Severity.Error);
+    }
+
+    _loading = false;
+  }
+
+  private async Task OpenCreateDialog()
+  {
+    var parameters = new DialogParameters<AlertRuleEditDialog>
+    {
+      { x => x.Rule, null },
+    };
+
+    var dialog = await DialogService.ShowAsync<AlertRuleEditDialog>("New Alert Rule", parameters,
+      new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+    var dialogResult = await dialog.Result;
+
+    if (dialogResult is { Canceled: false })
+    {
+      await RefreshRules();
+    }
+  }
+
+  private async Task OpenEditDialog(AlertRuleDto rule)
+  {
+    var parameters = new DialogParameters<AlertRuleEditDialog>
+    {
+      { x => x.Rule, rule },
+    };
+
+    var dialog = await DialogService.ShowAsync<AlertRuleEditDialog>("Edit Alert Rule", parameters,
+      new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+    var dialogResult = await dialog.Result;
+
+    if (dialogResult is { Canceled: false })
+    {
+      await RefreshRules();
+    }
+  }
+
+  private async Task DeleteRule(AlertRuleDto rule)
+  {
+    var confirmed = await DialogService.ShowMessageBox(
+      "Delete Alert Rule",
+      $"Are you sure you want to delete the rule '{rule.Name}'?",
+      "Delete", "Cancel");
+
+    if (confirmed != true)
+    {
+      return;
+    }
+
+    var result = await ControlrApi.DeleteAlertRule(rule.Id);
+    if (result.IsSuccess)
+    {
+      Snackbar.Add("Alert rule deleted.", Severity.Success);
+      await RefreshRules();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to delete rule: {result.Reason}", Severity.Error);
+    }
+  }
+}

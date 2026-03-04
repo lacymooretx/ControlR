@@ -1,0 +1,160 @@
+@inject IControlrApi ControlrApi
+@inject IDeviceStore DeviceStore
+@inject ISnackbar Snackbar
+
+<MudDialog>
+  <DialogContent>
+    <MudText Typo="Typo.subtitle1" Class="mb-3">
+      Current Assignments
+    </MudText>
+
+    @if (CurrentAssignments.Length == 0)
+    {
+      <MudAlert Severity="Severity.Info" Class="mb-3">No devices assigned yet.</MudAlert>
+    }
+    else
+    {
+      <MudList T="ClientDeviceAssignmentDto" Dense>
+        @foreach (var assignment in CurrentAssignments)
+        {
+          <MudListItem T="ClientDeviceAssignmentDto">
+            <div class="d-flex align-center">
+              <MudText>@(assignment.DeviceName ?? "Unknown Device")</MudText>
+              @if (assignment.ExpiresAt.HasValue)
+              {
+                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">
+                  Expires @assignment.ExpiresAt.Value.LocalDateTime.ToString("g")
+                </MudChip>
+              }
+              <MudSpacer />
+              <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+                Size="Size.Small" OnClick="@(() => RemoveAssignment(assignment))" />
+            </div>
+          </MudListItem>
+        }
+      </MudList>
+    }
+
+    <MudDivider Class="my-3" />
+
+    <MudText Typo="Typo.subtitle1" Class="mb-3">
+      Add Device Assignment
+    </MudText>
+
+    <MudSelect @bind-Value="_selectedDeviceId" Label="Device" Clearable>
+      @foreach (var device in AvailableDevices)
+      {
+        <MudSelectItem Value="@((Guid?)device.Id)">
+          @device.Name @(device.IsOnline ? "(Online)" : "(Offline)")
+        </MudSelectItem>
+      }
+    </MudSelect>
+
+    <MudDatePicker @bind-Date="_expiresDate" Label="Expiration Date (Optional)" Clearable
+      Class="mt-2" />
+
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3"
+      StartIcon="@Icons.Material.Filled.Add" OnClick="AddAssignment"
+      Disabled="@(_selectedDeviceId is null)">
+      Assign Device
+    </MudButton>
+  </DialogContent>
+  <DialogActions>
+    <MudButton OnClick="Close">Close</MudButton>
+  </DialogActions>
+</MudDialog>
+
+@code {
+  [CascadingParameter]
+  private IMudDialogInstance MudDialog { get; set; } = null!;
+
+  [Parameter]
+  public UserResponseDto ClientUser { get; set; } = null!;
+
+  [Parameter]
+  public ClientDeviceAssignmentDto[] CurrentAssignments { get; set; } = [];
+
+  private Guid? _selectedDeviceId;
+  private DateTime? _expiresDate;
+  private bool _changed;
+
+  private IEnumerable<DeviceResponseDto> AvailableDevices =>
+    DeviceStore.Items
+      .Where(d => !CurrentAssignments.Any(a => a.DeviceId == d.Id))
+      .OrderBy(d => d.Name);
+
+  protected override async Task OnInitializedAsync()
+  {
+    await DeviceStore.Refresh();
+  }
+
+  private async Task AddAssignment()
+  {
+    if (_selectedDeviceId is null)
+    {
+      return;
+    }
+
+    DateTimeOffset? expiresAt = _expiresDate.HasValue
+      ? new DateTimeOffset(_expiresDate.Value, TimeSpan.Zero)
+      : null;
+
+    var request = new ClientDeviceAssignmentCreateRequestDto(
+      ClientUser.Id, _selectedDeviceId.Value, expiresAt);
+
+    var result = await ControlrApi.CreateClientDeviceAssignment(request);
+    if (!result.IsSuccess)
+    {
+      Snackbar.Add(result.Reason, Severity.Error);
+      return;
+    }
+
+    Snackbar.Add("Device assigned", Severity.Success);
+    _changed = true;
+
+    // Refresh assignments
+    var refreshResult = await ControlrApi.GetClientDeviceAssignments(ClientUser.Id);
+    if (refreshResult.IsSuccess && refreshResult.Value is not null)
+    {
+      CurrentAssignments = refreshResult.Value;
+    }
+
+    _selectedDeviceId = null;
+    _expiresDate = null;
+    StateHasChanged();
+  }
+
+  private async Task RemoveAssignment(ClientDeviceAssignmentDto assignment)
+  {
+    var result = await ControlrApi.DeleteClientDeviceAssignment(assignment.Id);
+    if (!result.IsSuccess)
+    {
+      Snackbar.Add(result.Reason, Severity.Error);
+      return;
+    }
+
+    Snackbar.Add("Assignment removed", Severity.Success);
+    _changed = true;
+
+    // Refresh assignments
+    var refreshResult = await ControlrApi.GetClientDeviceAssignments(ClientUser.Id);
+    if (refreshResult.IsSuccess && refreshResult.Value is not null)
+    {
+      CurrentAssignments = refreshResult.Value;
+    }
+
+    StateHasChanged();
+  }
+
+  private void Close()
+  {
+    if (_changed)
+    {
+      MudDialog.Close(DialogResult.Ok(true));
+    }
+    else
+    {
+      MudDialog.Cancel();
+    }
+  }
+}

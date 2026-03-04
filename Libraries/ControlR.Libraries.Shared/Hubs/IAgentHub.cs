@@ -7,6 +7,8 @@ namespace ControlR.Libraries.Shared.Hubs;
 public interface IAgentHub
 {
   ChannelReader<byte[]> GetFileStreamFromViewer(FileUploadHubDto dto);
+  Task ReportInventory(InventoryReportHubDto report);
+  Task ReportScriptResult(ScriptExecutionResultHubDto result);
   Task<bool> SendChatResponse(ChatResponseHubDto responseDto);
   Task SendDesktopPreviewStream(Guid streamId, ChannelReader<byte[]> jpegChunks);
   Task SendDirectoryContentsStream(Guid streamId, bool directoryExists, ChannelReader<FileSystemEntryDto[]> entryChunks);

@@ -1,0 +1,249 @@
+@page "/webhooks"
+@attribute [Authorize(Roles = RoleNames.TenantAdministrator)]
+@inject IControlrApi ControlrApi
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudText Typo="Typo.h4" Color="Color.Primary" GutterBottom>
+  Webhooks
+</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+  <MudStack Row AlignItems="AlignItems.Center">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+      StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+      New Webhook
+    </MudButton>
+    <MudSpacer />
+    <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Info"
+      OnClick="RefreshWebhooks" />
+  </MudStack>
+</MudPaper>
+
+@if (_loading)
+{
+  <MudProgressLinear Indeterminate Color="Color.Primary" />
+}
+else if (_webhooks.Count == 0)
+{
+  <MudAlert Severity="Severity.Info">
+    No webhooks configured. Create a webhook to receive event notifications.
+  </MudAlert>
+}
+else
+{
+  <MudDataGrid T="WebhookSubscriptionDto" Items="_webhooks" SortMode="SortMode.Single"
+    Filterable="false" Hideable="false">
+    <Columns>
+      <PropertyColumn Property="x => x.Name" Title="Name" />
+      <PropertyColumn Property="x => x.Url" Title="URL" />
+      <TemplateColumn T="WebhookSubscriptionDto" Title="Events" Sortable="false">
+        <CellTemplate>
+          @(string.Join(", ", context.Item.EventTypes))
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="WebhookSubscriptionDto" Title="Status" Sortable="false">
+        <CellTemplate>
+          @if (context.Item.IsDisabledDueToFailures)
+          {
+            <MudChip T="string" Color="Color.Error" Size="Size.Small">Disabled (Failures)</MudChip>
+          }
+          else if (context.Item.IsEnabled)
+          {
+            <MudChip T="string" Color="Color.Success" Size="Size.Small">Enabled</MudChip>
+          }
+          else
+          {
+            <MudChip T="string" Color="Color.Default" Size="Size.Small">Disabled</MudChip>
+          }
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="WebhookSubscriptionDto" Title="Last Status" Sortable="false">
+        <CellTemplate>
+          @if (context.Item.LastStatus.HasValue)
+          {
+            var color = context.Item.LastStatus.Value < 300 ? Color.Success : Color.Error;
+            <MudChip T="string" Color="color" Size="Size.Small">@context.Item.LastStatus</MudChip>
+          }
+          else
+          {
+            <MudText Typo="Typo.body2">—</MudText>
+          }
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="WebhookSubscriptionDto" Title="Actions" Sortable="false">
+        <CellTemplate>
+          @{
+            var webhook = context.Item;
+          }
+          <MudStack Row>
+            <MudIconButton Icon="@Icons.Material.Filled.Send" Color="Color.Info"
+              Size="Size.Small" title="Test" OnClick="@(() => TestWebhook(webhook))" />
+            <MudIconButton Icon="@Icons.Material.Filled.History" Color="Color.Default"
+              Size="Size.Small" title="Deliveries" OnClick="@(() => ViewDeliveries(webhook))" />
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary"
+              Size="Size.Small" OnClick="@(() => OpenEditDialog(webhook))" />
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+              Size="Size.Small" OnClick="@(() => DeleteWebhook(webhook))" />
+          </MudStack>
+        </CellTemplate>
+      </TemplateColumn>
+    </Columns>
+  </MudDataGrid>
+}
+
+@if (_selectedWebhook is not null && _deliveries.Count > 0)
+{
+  <MudPaper Class="pa-4 mt-4">
+    <MudText Typo="Typo.h6" GutterBottom>
+      Delivery Log — @_selectedWebhook.Name
+    </MudText>
+    <MudDataGrid T="WebhookDeliveryLogDto" Items="_deliveries" SortMode="SortMode.None"
+      Filterable="false" Hideable="false" Dense>
+      <Columns>
+        <PropertyColumn Property="x => x.AttemptedAt" Title="Time" Format="yyyy-MM-dd HH:mm:ss" />
+        <PropertyColumn Property="x => x.EventType" Title="Event" />
+        <PropertyColumn Property="x => x.AttemptNumber" Title="Attempt" />
+        <TemplateColumn T="WebhookDeliveryLogDto" Title="Status" Sortable="false">
+          <CellTemplate>
+            @if (context.Item.IsSuccess)
+            {
+              <MudChip T="string" Color="Color.Success" Size="Size.Small">@context.Item.HttpStatusCode</MudChip>
+            }
+            else if (context.Item.HttpStatusCode.HasValue)
+            {
+              <MudChip T="string" Color="Color.Error" Size="Size.Small">@context.Item.HttpStatusCode</MudChip>
+            }
+            else
+            {
+              <MudChip T="string" Color="Color.Warning" Size="Size.Small">Error</MudChip>
+            }
+          </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn T="WebhookDeliveryLogDto" Title="Error" Sortable="false">
+          <CellTemplate>
+            @if (!string.IsNullOrEmpty(context.Item.ErrorMessage))
+            {
+              <MudText Typo="Typo.body2" Color="Color.Error">@context.Item.ErrorMessage</MudText>
+            }
+          </CellTemplate>
+        </TemplateColumn>
+      </Columns>
+    </MudDataGrid>
+  </MudPaper>
+}
+
+@code {
+  private List<WebhookDeliveryLogDto> _deliveries = [];
+  private bool _loading = true;
+  private WebhookSubscriptionDto? _selectedWebhook;
+  private List<WebhookSubscriptionDto> _webhooks = [];
+
+  protected override async Task OnInitializedAsync()
+  {
+    await RefreshWebhooks();
+  }
+
+  private async Task DeleteWebhook(WebhookSubscriptionDto webhook)
+  {
+    var confirmed = await DialogService.ShowMessageBox(
+      "Delete Webhook",
+      $"Are you sure you want to delete '{webhook.Name}'?",
+      "Delete", "Cancel");
+
+    if (confirmed != true)
+    {
+      return;
+    }
+
+    var result = await ControlrApi.DeleteWebhook(webhook.Id);
+    if (result.IsSuccess)
+    {
+      Snackbar.Add("Webhook deleted.", Severity.Success);
+      await RefreshWebhooks();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to delete webhook: {result.Reason}", Severity.Error);
+    }
+  }
+
+  private async Task OpenCreateDialog()
+  {
+    var parameters = new DialogParameters<WebhookEditDialog>
+    {
+      { x => x.Webhook, null },
+    };
+
+    var dialog = await DialogService.ShowAsync<WebhookEditDialog>("New Webhook", parameters,
+      new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+    var dialogResult = await dialog.Result;
+
+    if (dialogResult is { Canceled: false })
+    {
+      await RefreshWebhooks();
+    }
+  }
+
+  private async Task OpenEditDialog(WebhookSubscriptionDto webhook)
+  {
+    var parameters = new DialogParameters<WebhookEditDialog>
+    {
+      { x => x.Webhook, webhook },
+    };
+
+    var dialog = await DialogService.ShowAsync<WebhookEditDialog>("Edit Webhook", parameters,
+      new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+    var dialogResult = await dialog.Result;
+
+    if (dialogResult is { Canceled: false })
+    {
+      await RefreshWebhooks();
+    }
+  }
+
+  private async Task RefreshWebhooks()
+  {
+    _loading = true;
+    StateHasChanged();
+
+    var result = await ControlrApi.GetAllWebhooks();
+    if (result.IsSuccess)
+    {
+      _webhooks = result.Value.ToList();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to load webhooks: {result.Reason}", Severity.Error);
+    }
+
+    _loading = false;
+  }
+
+  private async Task TestWebhook(WebhookSubscriptionDto webhook)
+  {
+    var result = await ControlrApi.TestWebhook(webhook.Id);
+    if (result.IsSuccess)
+    {
+      Snackbar.Add("Test webhook dispatched.", Severity.Success);
+    }
+    else
+    {
+      Snackbar.Add($"Test failed: {result.Reason}", Severity.Error);
+    }
+  }
+
+  private async Task ViewDeliveries(WebhookSubscriptionDto webhook)
+  {
+    _selectedWebhook = webhook;
+    var result = await ControlrApi.GetWebhookDeliveries(webhook.Id);
+    if (result.IsSuccess)
+    {
+      _deliveries = result.Value.ToList();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to load deliveries: {result.Reason}", Severity.Error);
+    }
+  }
+}

@@ -33,12 +33,28 @@
   </MudRadioGroup>
 </div>
 
+<div class="mt-10">
+  <MudText Typo="Typo.h6" Color="Color.Primary" GutterBottom>
+    Two-Factor Authentication
+  </MudText>
+  <MudText Typo="Typo.body2" Class="mb-3">
+    When enabled, all users in this tenant must configure TOTP-based two-factor authentication.
+    Users without 2FA will be redirected to the setup page on login.
+    PAT and logon token authentication are exempt.
+  </MudText>
+
+  <MudSwitch T="bool" Value="_requireTotp" ValueChanged="SetRequireTotp" Color="Color.Primary"
+    Label="@(_requireTotp ? "Required" : "Optional")" />
+</div>
+
 @code {
   private bool? _notifyUser;
+  private bool _requireTotp;
 
   protected override async Task OnInitializedAsync()
   {
     _notifyUser = await TenantSettingsProvider.GetNotifyUserOnSessionStart();
+    _requireTotp = await TenantSettingsProvider.GetRequireTotp();
     await base.OnInitializedAsync();
   }
 
@@ -46,6 +62,13 @@
   {
     _notifyUser = value;
     await TenantSettingsProvider.SetNotifyUserOnSessionStart(value);
+    Snackbar.Add("Setting updated", Severity.Success);
+  }
+
+  private async Task SetRequireTotp(bool value)
+  {
+    _requireTotp = value;
+    await TenantSettingsProvider.SetRequireTotp(value);
     Snackbar.Add("Setting updated", Severity.Success);
   }
 }

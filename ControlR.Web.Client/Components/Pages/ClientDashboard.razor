@@ -1,0 +1,134 @@
+@page "/client"
+@attribute [Authorize(Roles = RoleNames.ClientUser)]
+@inject IControlrApi ControlrApi
+@inject ISnackbar Snackbar
+@inject NavigationManager NavMan
+
+<MudText Typo="Typo.h4" Color="Color.Primary" GutterBottom>
+  My Devices
+</MudText>
+
+@if (_loading)
+{
+  <MudProgressLinear Indeterminate Color="Color.Primary" />
+}
+else if (_devices.Length == 0)
+{
+  <MudAlert Severity="Severity.Info">
+    No devices have been assigned to your account yet. Contact your administrator for access.
+  </MudAlert>
+}
+else
+{
+  <MudDataGrid T="DeviceResponseDto" Items="_devices" SortMode="SortMode.Single"
+    Filterable="true" Hideable="true">
+
+    <ToolBarContent>
+      <MudSpacer />
+      <MudTextField T="string" Value="@_searchText" ValueChanged="OnSearch" Placeholder="Search"
+        Clearable Adornment="Adornment.Start" Immediate DebounceInterval="500"
+        AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" />
+      <MudTooltip Text="Refresh">
+        <MudIconButton Variant="Variant.Outlined" Color="Color.Info" Class="ml-4"
+          Icon="@Icons.Material.Filled.Refresh" OnClick="LoadDevices" />
+      </MudTooltip>
+    </ToolBarContent>
+
+    <Columns>
+      <PropertyColumn Title="Name" Property="x => x.Name" Sortable="true" />
+      <PropertyColumn Property="@(x => x.IsOnline)" Title="Status" Sortable="true">
+        <CellTemplate>
+          @if (context.Item.IsOnline)
+          {
+            <MudChip T="string" Color="Color.Success" Size="Size.Small">Online</MudChip>
+          }
+          else
+          {
+            <MudChip T="string" Color="Color.Error" Size="Size.Small">Offline</MudChip>
+          }
+        </CellTemplate>
+      </PropertyColumn>
+      <PropertyColumn Property="@(x => x.Platform)" Title="Platform" Sortable="true">
+        <CellTemplate>
+          @switch (context.Item.Platform)
+          {
+            case SystemPlatform.Windows:
+              <MudIcon Icon="@Icons.Custom.Brands.MicrosoftWindows" Color="Color.Info" />
+              break;
+            case SystemPlatform.MacOs:
+              <MudIcon Icon="@Icons.Custom.Brands.Apple" Color="Color.Info" />
+              break;
+            case SystemPlatform.Linux:
+              <MudIcon Icon="@Icons.Custom.Brands.Linux" Color="Color.Info" />
+              break;
+            default:
+              <MudIcon Icon="@Icons.Material.Filled.Help" Color="Color.Warning" />
+              break;
+          }
+        </CellTemplate>
+      </PropertyColumn>
+      <PropertyColumn Property="x => x.OsDescription" Title="OS" Sortable="true" />
+      <PropertyColumn Property="x => x.DeviceGroupName" Title="Group" Sortable="true" />
+      <PropertyColumn Property="x => x.LastSeen" Title="Last Seen" Sortable="true">
+        <CellTemplate>
+          @context.Item.LastSeen.LocalDateTime.ToString("g")
+        </CellTemplate>
+      </PropertyColumn>
+    </Columns>
+  </MudDataGrid>
+}
+
+@code {
+  private DeviceResponseDto[] _devices = [];
+  private DeviceResponseDto[] _allDevices = [];
+  private bool _loading = true;
+  private string _searchText = string.Empty;
+
+  protected override async Task OnInitializedAsync()
+  {
+    await LoadDevices();
+  }
+
+  private async Task LoadDevices()
+  {
+    _loading = true;
+    StateHasChanged();
+
+    var result = await ControlrApi.GetClientDevices();
+    if (result.IsSuccess)
+    {
+      _allDevices = result.Value ?? [];
+      ApplySearch();
+    }
+    else
+    {
+      Snackbar.Add("Failed to load devices", Severity.Error);
+    }
+
+    _loading = false;
+    StateHasChanged();
+  }
+
+  private void OnSearch(string searchText)
+  {
+    _searchText = searchText;
+    ApplySearch();
+  }
+
+  private void ApplySearch()
+  {
+    if (string.IsNullOrWhiteSpace(_searchText))
+    {
+      _devices = _allDevices;
+    }
+    else
+    {
+      _devices = _allDevices
+        .Where(d =>
+          d.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
+          (d.OsDescription?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false) ||
+          (d.DeviceGroupName?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false))
+        .ToArray();
+    }
+  }
+}

@@ -66,6 +66,25 @@ public static class DeviceAccessByDeviceResourcePolicy
 
         await using var scope = sp.CreateAsyncScope();
         await using var db = scope.ServiceProvider.GetRequiredService<AppDb>();
+
+        // Client users: check explicit device assignments
+        if (handlerCtx.User.IsInRole(RoleNames.ClientUser))
+        {
+          var hasAssignment = await db.ClientDeviceAssignments
+            .AsNoTracking()
+            .AnyAsync(x =>
+              x.ClientUserId == userId &&
+              x.DeviceId == device.Id &&
+              (x.ExpiresAt == null || x.ExpiresAt > DateTimeOffset.UtcNow));
+
+          if (hasAssignment)
+          {
+            return true;
+          }
+
+          // Also check tag-based access for client users
+        }
+
         var user = await db.Users
           .AsNoTracking()
           .Include(x => x.Tags)

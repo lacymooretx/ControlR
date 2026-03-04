@@ -9,6 +9,7 @@ public interface IViewerHubClient
   Task InvokeToast(ToastInfo toastInfo);
   Task<bool> ReceiveChatResponse(ChatResponseHubDto dto);
   Task ReceiveDeviceUpdate(DeviceResponseDto deviceDto);
+  Task ReceiveScriptExecutionProgress(ScriptExecutionResultHubDto result);
   Task ReceiveServerStats(ServerStatsDto serverStats);
   Task ReceiveTerminalOutput(TerminalOutputDto output);
 }

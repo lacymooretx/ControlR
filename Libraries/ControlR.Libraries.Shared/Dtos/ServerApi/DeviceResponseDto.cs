@@ -35,9 +35,13 @@ public record DeviceResponseDto(
    IReadOnlyList<Drive> Drives,
    bool IsOutdated) : IHasPrimaryKey
 {
-  public ImmutableArray<Guid>? TagIds { get; set; }
-
   public string? Alias { get; init; }
+
+  public Guid? DeviceGroupId { get; init; }
+
+  public string? DeviceGroupName { get; init; }
+
+  public ImmutableArray<Guid>? TagIds { get; set; }
 
   [IgnoreDataMember]
   [JsonIgnore]

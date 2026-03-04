@@ -1,0 +1,202 @@
+@inject IControlrApi ControlrApi
+@inject ISnackbar Snackbar
+@inject IDeviceStore DeviceStore
+
+<MudDialog>
+  <DialogContent>
+    <MudTextField @bind-Value="_name" Label="Name" Required />
+    <MudTextField @bind-Value="_description" Label="Description" Lines="2" Class="mt-2" />
+
+    <MudSelect T="string" @bind-Value="_taskType" Label="Task Type" Class="mt-2" Required>
+      <MudSelectItem Value="@("Script")">Script</MudSelectItem>
+    </MudSelect>
+
+    @if (_taskType == "Script")
+    {
+      <MudSelect T="Guid?" @bind-Value="_scriptId" Label="Script" Class="mt-2" Required>
+        @foreach (var script in _scripts)
+        {
+          <MudSelectItem T="Guid?" Value="@script.Id">@script.Name (@script.ScriptType)</MudSelectItem>
+        }
+      </MudSelect>
+    }
+
+    <MudTextField @bind-Value="_cronExpression" Label="Cron Expression" Required Class="mt-2"
+      HelperText="e.g. */5 * * * * (every 5 minutes)" />
+
+    <MudTextField @bind-Value="_timeZone" Label="Time Zone" Class="mt-2"
+      HelperText="e.g. UTC, America/Chicago" />
+
+    <MudText Typo="Typo.subtitle2" Class="mt-4 mb-2">Target Devices</MudText>
+    <MudTextField @bind-Value="_deviceFilter" Label="Filter devices" Adornment="Adornment.Start"
+      AdornmentIcon="@Icons.Material.Filled.Search" Immediate DebounceInterval="300" Class="mb-2" />
+
+    <MudPaper Style="max-height: 200px; overflow-y: auto;" Class="pa-2">
+      @foreach (var device in FilteredDevices)
+      {
+        <MudCheckBox T="bool" Value="@_selectedDeviceIds.Contains(device.Id)"
+          ValueChanged="@(v => ToggleDevice(device.Id, v))"
+          Label="@device.Name"
+          Color="Color.Primary" Dense />
+      }
+    </MudPaper>
+
+    @if (_deviceGroups.Count > 0)
+    {
+      <MudText Typo="Typo.subtitle2" Class="mt-4 mb-2">Target Groups</MudText>
+      <MudPaper Style="max-height: 150px; overflow-y: auto;" Class="pa-2">
+        @foreach (var group in _deviceGroups)
+        {
+          <MudCheckBox T="bool" Value="@_selectedGroupIds.Contains(group.Id)"
+            ValueChanged="@(v => ToggleGroup(group.Id, v))"
+            Label="@group.Name"
+            Color="Color.Primary" Dense />
+        }
+      </MudPaper>
+    }
+
+    @if (ExistingTask is not null)
+    {
+      <MudSwitch T="bool" @bind-Value="_isEnabled" Label="Enabled" Color="Color.Success" Class="mt-3" />
+    }
+  </DialogContent>
+  <DialogActions>
+    <MudButton OnClick="Cancel">Cancel</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save"
+      Disabled="@(_saving || string.IsNullOrWhiteSpace(_name) || string.IsNullOrWhiteSpace(_cronExpression))">
+      @if (_saving)
+      {
+        <MudProgressCircular Indeterminate Size="Size.Small" Class="mr-2" />
+      }
+      Save
+    </MudButton>
+  </DialogActions>
+</MudDialog>
+
+@code {
+  [CascadingParameter]
+  private IMudDialogInstance MudDialog { get; set; } = null!;
+
+  [Parameter]
+  public ScheduledTaskDto? ExistingTask { get; set; }
+
+  private string _name = string.Empty;
+  private string _description = string.Empty;
+  private string _taskType = "Script";
+  private Guid? _scriptId;
+  private string _cronExpression = string.Empty;
+  private string _timeZone = "UTC";
+  private bool _isEnabled = true;
+  private bool _saving;
+  private string _deviceFilter = string.Empty;
+
+  private HashSet<Guid> _selectedDeviceIds = [];
+  private HashSet<Guid> _selectedGroupIds = [];
+  private List<SavedScriptDto> _scripts = [];
+  private List<DeviceGroupDto> _deviceGroups = [];
+
+  private IEnumerable<DeviceResponseDto> FilteredDevices =>
+    DeviceStore.Items
+      .Where(d => string.IsNullOrWhiteSpace(_deviceFilter) ||
+                  d.Name.Contains(_deviceFilter, StringComparison.OrdinalIgnoreCase))
+      .OrderBy(d => d.Name);
+
+  protected override async Task OnInitializedAsync()
+  {
+    var scriptsResult = await ControlrApi.GetAllScripts();
+    if (scriptsResult.IsSuccess)
+    {
+      _scripts = scriptsResult.Value.ToList();
+    }
+
+    var groupsResult = await ControlrApi.GetAllDeviceGroups();
+    if (groupsResult.IsSuccess)
+    {
+      _deviceGroups = groupsResult.Value.ToList();
+    }
+
+    await DeviceStore.Refresh();
+
+    if (ExistingTask is not null)
+    {
+      _name = ExistingTask.Name;
+      _description = ExistingTask.Description;
+      _taskType = ExistingTask.TaskType;
+      _scriptId = ExistingTask.ScriptId;
+      _cronExpression = ExistingTask.CronExpression;
+      _timeZone = ExistingTask.TimeZone;
+      _isEnabled = ExistingTask.IsEnabled;
+      _selectedDeviceIds = new HashSet<Guid>(ExistingTask.TargetDeviceIds);
+      _selectedGroupIds = new HashSet<Guid>(ExistingTask.TargetGroupIds);
+    }
+  }
+
+  private void ToggleDevice(Guid deviceId, bool selected)
+  {
+    if (selected) _selectedDeviceIds.Add(deviceId);
+    else _selectedDeviceIds.Remove(deviceId);
+  }
+
+  private void ToggleGroup(Guid groupId, bool selected)
+  {
+    if (selected) _selectedGroupIds.Add(groupId);
+    else _selectedGroupIds.Remove(groupId);
+  }
+
+  private void Cancel() => MudDialog.Cancel();
+
+  private async Task Save()
+  {
+    _saving = true;
+
+    if (ExistingTask is null)
+    {
+      var request = new ScheduledTaskCreateRequestDto(
+        _name,
+        _description,
+        _taskType,
+        _scriptId,
+        _cronExpression,
+        _timeZone,
+        _selectedDeviceIds.ToList().AsReadOnly(),
+        _selectedGroupIds.ToList().AsReadOnly());
+
+      var result = await ControlrApi.CreateScheduledTask(request);
+      if (!result.IsSuccess)
+      {
+        Snackbar.Add(result.Reason, Severity.Error);
+        _saving = false;
+        return;
+      }
+
+      Snackbar.Add("Task created", Severity.Success);
+    }
+    else
+    {
+      var request = new ScheduledTaskUpdateRequestDto(
+        ExistingTask.Id,
+        _name,
+        _description,
+        _taskType,
+        _scriptId,
+        _cronExpression,
+        _timeZone,
+        _isEnabled,
+        _selectedDeviceIds.ToList().AsReadOnly(),
+        _selectedGroupIds.ToList().AsReadOnly());
+
+      var result = await ControlrApi.UpdateScheduledTask(request);
+      if (!result.IsSuccess)
+      {
+        Snackbar.Add(result.Reason, Severity.Error);
+        _saving = false;
+        return;
+      }
+
+      Snackbar.Add("Task updated", Severity.Success);
+    }
+
+    _saving = false;
+    MudDialog.Close(DialogResult.Ok(true));
+  }
+}

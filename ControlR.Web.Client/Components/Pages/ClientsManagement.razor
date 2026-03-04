@@ -1,0 +1,140 @@
+@page "/clients"
+@attribute [Authorize(Roles = RoleNames.TenantAdministrator)]
+@inject IControlrApi ControlrApi
+@inject IUserStore UserStore
+@inject IDeviceStore DeviceStore
+@inject IRoleStore RoleStore
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudText Typo="Typo.h4" Color="Color.Primary" GutterBottom>
+  Client Management
+</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+  <MudStack Row AlignItems="AlignItems.Center">
+    <MudText Typo="Typo.body1">
+      Manage client users and their device assignments. Users with the "Client User" role will see a restricted dashboard with only their assigned devices.
+    </MudText>
+    <MudSpacer />
+    <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Info"
+      OnClick="LoadData" />
+  </MudStack>
+</MudPaper>
+
+@if (_loading)
+{
+  <MudProgressLinear Indeterminate Color="Color.Primary" />
+}
+else if (_clientUsers.Count == 0)
+{
+  <MudAlert Severity="Severity.Info">
+    No client users found. Assign the "Client User" role to a user on the Permissions page to get started.
+  </MudAlert>
+}
+else
+{
+  <MudDataGrid T="UserResponseDto" Items="_clientUsers" SortMode="SortMode.Single">
+    <Columns>
+      <PropertyColumn Property="x => x.UserName" Title="Username" />
+      <TemplateColumn T="UserResponseDto" Title="Assigned Devices" Sortable="false">
+        <CellTemplate>
+          @{
+            var count = GetAssignmentCount(context.Item.Id);
+          }
+          <MudChip T="string" Color="Color.Info" Size="Size.Small">@count devices</MudChip>
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="UserResponseDto" Title="Actions" Sortable="false">
+        <CellTemplate>
+          <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+            StartIcon="@Icons.Material.Filled.Devices"
+            OnClick="@(() => ManageAssignments(context.Item))">
+            Manage Devices
+          </MudButton>
+        </CellTemplate>
+      </TemplateColumn>
+    </Columns>
+  </MudDataGrid>
+}
+
+@code {
+  private List<UserResponseDto> _clientUsers = [];
+  private Dictionary<Guid, ClientDeviceAssignmentDto[]> _assignments = new();
+  private bool _loading = true;
+
+  protected override async Task OnInitializedAsync()
+  {
+    await LoadData();
+  }
+
+  private int GetAssignmentCount(Guid userId)
+  {
+    return _assignments.TryGetValue(userId, out var assignments)
+      ? assignments.Length
+      : 0;
+  }
+
+  private async Task LoadData()
+  {
+    _loading = true;
+    StateHasChanged();
+
+    await Task.WhenAll(
+      UserStore.Refresh(),
+      RoleStore.Refresh());
+
+    // Find the ClientUser role ID
+    var clientRole = RoleStore.Items.FirstOrDefault(r =>
+      string.Equals(r.Name, RoleNames.ClientUser, StringComparison.OrdinalIgnoreCase));
+
+    if (clientRole is null)
+    {
+      _clientUsers = [];
+      _loading = false;
+      StateHasChanged();
+      return;
+    }
+
+    // Filter users who have the ClientUser role
+    _clientUsers = UserStore.Items
+      .Where(u => clientRole.UserIds.Contains(u.Id))
+      .OrderBy(u => u.UserName)
+      .ToList();
+
+    // Load assignments for each client user
+    _assignments.Clear();
+    foreach (var user in _clientUsers)
+    {
+      var result = await ControlrApi.GetClientDeviceAssignments(user.Id);
+      if (result.IsSuccess && result.Value is not null)
+      {
+        _assignments[user.Id] = result.Value;
+      }
+    }
+
+    _loading = false;
+    StateHasChanged();
+  }
+
+  private async Task ManageAssignments(UserResponseDto user)
+  {
+    var currentAssignments = _assignments.TryGetValue(user.Id, out var a) ? a : [];
+    var parameters = new DialogParameters<ClientDeviceAssignmentDialog>
+    {
+      { x => x.ClientUser, user },
+      { x => x.CurrentAssignments, currentAssignments },
+    };
+
+    var dialog = await DialogService.ShowAsync<ClientDeviceAssignmentDialog>(
+      $"Device Assignments - {user.UserName}", parameters,
+      new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+
+    var result = await dialog.Result;
+
+    if (result is { Canceled: false })
+    {
+      await LoadData();
+    }
+  }
+}

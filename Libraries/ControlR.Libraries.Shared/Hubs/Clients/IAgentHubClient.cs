@@ -11,12 +11,14 @@ public interface IAgentHubClient : IHubClient
 {
   Task<Result> CloseChatSession(Guid sessionId, int targetProcessId);
   Task CloseTerminalSession(Guid terminalSessionId);
+  Task CollectInventory();
   Task<Result> CreateDirectory(CreateDirectoryHubDto dto);
   Task<Result> CreateRemoteControlSession(RemoteControlSessionRequestDto dto);
   Task<Result> CreateTerminalSession(Guid terminalSessionId, string viewerConnectionId);
   Task<Result> CreateVncSession(VncSessionRequestDto sessionRequestDto);
   Task<Result> DeleteFile(FileDeleteHubDto dto);
   Task<Result> DownloadFileFromViewer(FileUploadHubDto dto);
+  Task ExecuteScript(ScriptExecutionRequestHubDto request);
   Task<DesktopSession[]> GetActiveDesktopSessions();
   Task<Result<GetLogFilesResponseDto>> GetLogFiles();
   Task<PathSegmentsResponseDto> GetPathSegments(GetPathSegmentsHubDto dto);

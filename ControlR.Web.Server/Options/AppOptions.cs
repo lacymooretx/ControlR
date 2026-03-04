@@ -13,6 +13,11 @@ public class AppOptions
   public bool EnableCloudflareProxySupport { get; init; }
   public bool EnableNetworkTrust { get; init; }
   public bool EnablePublicRegistration { get; init; }
+  public string? EntraIdClientId { get; init; }
+  [ProtectedDataClassification]
+  public string? EntraIdClientSecret { get; init; }
+  public string? EntraIdInstance { get; init; }
+  public string? EntraIdTenantId { get; init; }
   public string? GitHubClientId { get; init; }
   [ProtectedDataClassification]
   public string? GitHubClientSecret { get; init; }
