@@ -40,6 +40,7 @@ RUN dotnet publish "./ControlR.Web.Server.csproj" -c $BUILD_CONFIGURATION -p:Ver
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+RUN mkdir -p novnc
 ENTRYPOINT ["dotnet", "ControlR.Web.Server.dll"]
 
 HEALTHCHECK \
