@@ -56,16 +56,25 @@ export function initTerminal(containerId, dotnetRef, cols, rows) {
     });
   }
 
-  // User keyboard input → send to .NET
+  // Helper: convert bytes to base64 for Blazor WASM interop
+  function toBase64(uint8Array) {
+    let binary = '';
+    for (let i = 0; i < uint8Array.length; i++) {
+      binary += String.fromCharCode(uint8Array[i]);
+    }
+    return btoa(binary);
+  }
+
+  // User keyboard input → send to .NET as base64
   term.onData(data => {
     const bytes = new TextEncoder().encode(data);
-    dotnetRef.invokeMethodAsync('OnTerminalInput', bytes);
+    dotnetRef.invokeMethodAsync('OnTerminalInput', toBase64(bytes));
   });
 
-  // Binary data (e.g., from paste) → send to .NET
+  // Binary data (e.g., from paste) → send to .NET as base64
   term.onBinary(data => {
     const bytes = Uint8Array.from(data, c => c.charCodeAt(0));
-    dotnetRef.invokeMethodAsync('OnTerminalInput', bytes);
+    dotnetRef.invokeMethodAsync('OnTerminalInput', toBase64(bytes));
   });
 
   // Terminal resize → notify .NET

@@ -70,7 +70,7 @@ public partial class PtyTerminal
   }
 
   [JSInvokable]
-  public async Task OnTerminalInput(byte[] data)
+  public async Task OnTerminalInput(string base64Data)
   {
     if (!_initialized)
     {
@@ -79,6 +79,7 @@ public partial class PtyTerminal
 
     try
     {
+      var data = Convert.FromBase64String(base64Data);
       var dto = new PtyInputDto(_terminalId, data);
       var result = await ViewerHub.Server.SendPtyInput(DeviceId, dto);
 
