@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using ControlR.Agent.Common.Services.Terminal.Interop;
 using Microsoft.Win32.SafeHandles;
 
@@ -88,12 +89,9 @@ internal class PtyTerminalSession : IPtyTerminalSession
         _writeStream?.Write(data, 0, data.Length);
         _writeStream?.Flush();
       }
-      else
+      else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
       {
-        if (_masterFd >= 0)
-        {
-          UnixPtyInterop.Write(_masterFd, data, data.Length);
-        }
+        WriteInputUnix(data);
       }
 
       return Task.FromResult(Result.Ok());
@@ -123,16 +121,12 @@ internal class PtyTerminalSession : IPtyTerminalSession
           return Result.Fail($"ResizePseudoConsole failed with HRESULT: 0x{hr:X8}");
         }
       }
-      else
+      else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
       {
-        if (_masterFd >= 0)
+        var resizeResult = ResizeUnix(cols, rows);
+        if (!resizeResult.IsSuccess)
         {
-          var ws = new UnixPtyInterop.WinSize(rows, cols);
-          var result = UnixPtyInterop.Ioctl(_masterFd, UnixPtyInterop.TIOCSWINSZ, ref ws);
-          if (result < 0)
-          {
-            return Result.Fail($"ioctl TIOCSWINSZ failed with errno: {Marshal.GetLastWin32Error()}");
-          }
+          return resizeResult;
         }
       }
 
@@ -179,6 +173,7 @@ internal class PtyTerminalSession : IPtyTerminalSession
     ProcessExited?.Invoke(this, EventArgs.Empty);
   }
 
+  [SupportedOSPlatform("windows")]
   private void InitializeWindows(int cols, int rows)
   {
     // Create pipes for ConPTY I/O
@@ -214,6 +209,7 @@ internal class PtyTerminalSession : IPtyTerminalSession
     _readStream = new FileStream(_pipeReadOutput, FileAccess.Read);
   }
 
+  [SupportedOSPlatform("windows")]
   private void StartProcessWithPseudoConsole()
   {
     // Initialize the attribute list
@@ -274,6 +270,7 @@ internal class PtyTerminalSession : IPtyTerminalSession
     }
   }
 
+  [SupportedOSPlatform("windows")]
   private void MonitorWindowsProcess(IntPtr hProcess)
   {
     ConPtyInterop.WaitForSingleObject(hProcess, 0xFFFFFFFF); // INFINITE
@@ -284,6 +281,8 @@ internal class PtyTerminalSession : IPtyTerminalSession
     }
   }
 
+  [SupportedOSPlatform("linux")]
+  [SupportedOSPlatform("macos")]
   private void InitializeUnix(int cols, int rows)
   {
     var ws = new UnixPtyInterop.WinSize(rows, cols);
@@ -310,6 +309,8 @@ internal class PtyTerminalSession : IPtyTerminalSession
     _ = Task.Run(() => MonitorUnixProcess(pid));
   }
 
+  [SupportedOSPlatform("linux")]
+  [SupportedOSPlatform("macos")]
   private void MonitorUnixProcess(int pid)
   {
     while (!_sessionCts.IsCancellationRequested)
@@ -355,18 +356,13 @@ internal class PtyTerminalSession : IPtyTerminalSession
 
           bytesRead = await _readStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken);
         }
+        else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+        {
+          bytesRead = await ReadUnixAsync(buffer, cancellationToken);
+        }
         else
         {
-          // Unix read is blocking, run on thread pool
-          bytesRead = await Task.Run(() =>
-          {
-            if (_masterFd < 0)
-            {
-              return 0;
-            }
-
-            return UnixPtyInterop.Read(_masterFd, buffer, buffer.Length);
-          }, cancellationToken);
+          break;
         }
 
         if (bytesRead <= 0)
@@ -404,6 +400,49 @@ internal class PtyTerminalSession : IPtyTerminalSession
     }
   }
 
+  [SupportedOSPlatform("linux")]
+  [SupportedOSPlatform("macos")]
+  private void WriteInputUnix(byte[] data)
+  {
+    if (_masterFd >= 0)
+    {
+      UnixPtyInterop.Write(_masterFd, data, data.Length);
+    }
+  }
+
+  [SupportedOSPlatform("linux")]
+  [SupportedOSPlatform("macos")]
+  private Result ResizeUnix(int cols, int rows)
+  {
+    if (_masterFd >= 0)
+    {
+      var ws = new UnixPtyInterop.WinSize(rows, cols);
+      var result = UnixPtyInterop.Ioctl(_masterFd, UnixPtyInterop.TIOCSWINSZ, ref ws);
+      if (result < 0)
+      {
+        return Result.Fail($"ioctl TIOCSWINSZ failed with errno: {Marshal.GetLastWin32Error()}");
+      }
+    }
+
+    return Result.Ok();
+  }
+
+  [SupportedOSPlatform("linux")]
+  [SupportedOSPlatform("macos")]
+  private Task<int> ReadUnixAsync(byte[] buffer, CancellationToken cancellationToken)
+  {
+    return Task.Run(() =>
+    {
+      if (_masterFd < 0)
+      {
+        return 0;
+      }
+
+      return UnixPtyInterop.Read(_masterFd, buffer, buffer.Length);
+    }, cancellationToken);
+  }
+
+  [SupportedOSPlatform("windows")]
   private void DisposeWindows()
   {
     try
@@ -438,6 +477,8 @@ internal class PtyTerminalSession : IPtyTerminalSession
     }
   }
 
+  [SupportedOSPlatform("linux")]
+  [SupportedOSPlatform("macos")]
   private void DisposeUnix()
   {
     try
