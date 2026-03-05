@@ -3,7 +3,7 @@ using Microsoft.JSInterop;
 
 namespace ControlR.Web.Client.Components.Pages.DeviceAccess;
 
-public partial class PtyTerminal : IAsyncDisposable
+public partial class PtyTerminal
 {
   private readonly string _containerId = $"pty-terminal-{Guid.NewGuid():N}";
   private readonly Guid _terminalId = Guid.NewGuid();
@@ -117,40 +117,44 @@ public partial class PtyTerminal : IAsyncDisposable
     }
   }
 
-  public async ValueTask DisposeAsync()
+  protected override async ValueTask DisposeAsync(bool disposing)
   {
-    Messenger.UnregisterAll(this);
-
-    if (_initialized)
+    if (disposing)
     {
-      try
+      Messenger.UnregisterAll(this);
+
+      if (_initialized)
       {
-        await ViewerHub.Server.ClosePtySession(DeviceId, _terminalId);
+        try
+        {
+          await ViewerHub.Server.ClosePtySession(DeviceId, _terminalId);
+        }
+        catch (Exception ex)
+        {
+          Logger.LogError(ex, "Error closing PTY session.");
+        }
       }
-      catch (Exception ex)
+
+      if (IsJsModuleReady)
       {
-        Logger.LogError(ex, "Error closing PTY session.");
+        try
+        {
+          await JsModule.InvokeVoidAsync("dispose", _containerId);
+        }
+        catch (JSDisconnectedException)
+        {
+          // Expected during circuit disconnect
+        }
+        catch (Exception ex)
+        {
+          Logger.LogError(ex, "Error disposing JS terminal.");
+        }
       }
+
+      _dotNetRef?.Dispose();
     }
 
-    if (IsJsModuleReady)
-    {
-      try
-      {
-        await JsModule.InvokeVoidAsync("dispose", _containerId);
-      }
-      catch (JSDisconnectedException)
-      {
-        // Expected during circuit disconnect
-      }
-      catch (Exception ex)
-      {
-        Logger.LogError(ex, "Error disposing JS terminal.");
-      }
-    }
-
-    _dotNetRef?.Dispose();
-    GC.SuppressFinalize(this);
+    await base.DisposeAsync(disposing);
   }
 
   private async Task HandlePtyOutput(object subscriber, DtoReceivedMessage<PtyOutputDto> message)
