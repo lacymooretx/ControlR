@@ -59,13 +59,13 @@ export function initTerminal(containerId, dotnetRef, cols, rows) {
   // User keyboard input → send to .NET
   term.onData(data => {
     const bytes = new TextEncoder().encode(data);
-    dotnetRef.invokeMethodAsync('OnTerminalInput', Array.from(bytes));
+    dotnetRef.invokeMethodAsync('OnTerminalInput', bytes);
   });
 
   // Binary data (e.g., from paste) → send to .NET
   term.onBinary(data => {
     const bytes = Uint8Array.from(data, c => c.charCodeAt(0));
-    dotnetRef.invokeMethodAsync('OnTerminalInput', Array.from(bytes));
+    dotnetRef.invokeMethodAsync('OnTerminalInput', bytes);
   });
 
   // Terminal resize → notify .NET
