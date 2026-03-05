@@ -165,7 +165,7 @@ internal class PtyTerminalSession : IPtyTerminalSession
     {
       DisposeWindows();
     }
-    else
+    else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
     {
       DisposeUnix();
     }
