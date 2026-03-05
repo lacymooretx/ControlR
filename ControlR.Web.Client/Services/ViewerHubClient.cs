@@ -46,6 +46,11 @@ public class ViewerHubClient(IMessenger messenger)
     await _messenger.Send(message);
   }
 
+  public async Task ReceivePtyOutput(PtyOutputDto output)
+  {
+    await _messenger.Send(new DtoReceivedMessage<PtyOutputDto>(output));
+  }
+
   public async Task ReceiveTerminalOutput(TerminalOutputDto output)
   {
     await _messenger.Send(new DtoReceivedMessage<TerminalOutputDto>(output));

@@ -10,10 +10,12 @@ namespace ControlR.Libraries.Shared.Hubs.Clients;
 public interface IAgentHubClient : IHubClient
 {
   Task<Result> CloseChatSession(Guid sessionId, int targetProcessId);
+  Task ClosePtySession(Guid terminalSessionId);
   Task CloseTerminalSession(Guid terminalSessionId);
   Task CollectInventory();
   Task<Result> CreateDirectory(CreateDirectoryHubDto dto);
   Task<Result> CreateRemoteControlSession(RemoteControlSessionRequestDto dto);
+  Task<Result> CreatePtySession(Guid terminalSessionId, string viewerConnectionId, int cols, int rows);
   Task<Result> CreateTerminalSession(Guid terminalSessionId, string viewerConnectionId);
   Task<Result> CreateVncSession(VncSessionRequestDto sessionRequestDto);
   Task<Result> DeleteFile(FileDeleteHubDto dto);
@@ -28,7 +30,9 @@ public interface IAgentHubClient : IHubClient
   Task InvokeWakeDevice(WakeDeviceDto dto);
   Task ReceiveAgentUpdateTrigger();
   Task ReceivePowerStateChange(PowerStateChangeType changeType);
+  Task<Result> ReceivePtyInput(PtyInputDto dto);
   Task<Result> ReceiveTerminalInput(TerminalInputDto dto);
+  Task<Result> ResizePty(PtyResizeDto dto);
   Task RefreshDeviceInfo();
   Task<Result> RequestDesktopPreview(DesktopPreviewRequestDto dto);
   Task<Result> SendChatMessage(ChatMessageHubDto dto);

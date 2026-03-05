@@ -8,8 +8,12 @@ namespace ControlR.Agent.Common.Services.Terminal;
 public interface ITerminalStore
 {
   Task<Result> CreateSession(Guid terminalId, string viewerConnectionId);
+  Task<Result> CreatePtySession(Guid terminalId, string viewerConnectionId, int cols, int rows);
   Task<Result<PwshCompletionsResponseDto>> GetPwshCompletions(PwshCompletionsRequestDto requestDto);
+  Task<Result> WritePtyInput(Guid terminalId, byte[] data, CancellationToken cancellationToken);
+  Result ResizePty(Guid terminalId, int cols, int rows);
   bool TryRemove(Guid terminalId, [NotNullWhen(true)] out ITerminalSession? terminalSession);
+  bool TryRemovePty(Guid terminalId);
 
   Task<Result> WriteInput(Guid terminalId, string input, string viewerConnectionId, CancellationToken cancellationToken);
 }
@@ -19,6 +23,85 @@ internal class TerminalStore(
   ILogger<TerminalStore> logger) : ITerminalStore
 {
   private readonly MemoryCache _sessionCache = new(new MemoryCacheOptions());
+  private readonly MemoryCache _ptySessionCache = new(new MemoryCacheOptions());
+
+  public async Task<Result> CreatePtySession(Guid terminalId, string viewerConnectionId, int cols, int rows)
+  {
+    try
+    {
+      var sessionResult = await sessionFactory.CreatePtySession(terminalId, viewerConnectionId, cols, rows);
+      if (!sessionResult.IsSuccess)
+      {
+        return Result.Fail(sessionResult.Reason);
+      }
+
+      var ptySession = (PtyTerminalSession)sessionResult.Value;
+      var entryOptions = GetPtyEntryOptions(ptySession);
+      _ptySessionCache.Set(terminalId, ptySession, entryOptions);
+
+      return Result.Ok();
+    }
+    catch (Exception ex)
+    {
+      logger.LogError(ex, "Error while creating PTY session.");
+      return Result.Fail("An error occurred.");
+    }
+  }
+
+  public async Task<Result> WritePtyInput(Guid terminalId, byte[] data, CancellationToken cancellationToken)
+  {
+    try
+    {
+      if (!_ptySessionCache.TryGetValue(terminalId, out var cachedItem) ||
+          cachedItem is not PtyTerminalSession session ||
+          session.IsDisposed)
+      {
+        return Result.Fail("PTY session not found.");
+      }
+
+      return await session.WriteInput(data, cancellationToken);
+    }
+    catch (Exception ex)
+    {
+      logger.LogError(ex, "Error while writing PTY input.");
+      return Result.Fail("An error occurred.");
+    }
+  }
+
+  public Result ResizePty(Guid terminalId, int cols, int rows)
+  {
+    try
+    {
+      if (!_ptySessionCache.TryGetValue(terminalId, out var cachedItem) ||
+          cachedItem is not PtyTerminalSession session ||
+          session.IsDisposed)
+      {
+        return Result.Fail("PTY session not found.");
+      }
+
+      return session.Resize(cols, rows);
+    }
+    catch (Exception ex)
+    {
+      logger.LogError(ex, "Error while resizing PTY.");
+      return Result.Fail("An error occurred.");
+    }
+  }
+
+  public bool TryRemovePty(Guid terminalId)
+  {
+    if (_ptySessionCache.TryGetValue(terminalId, out var cachedItem) &&
+        cachedItem is PtyTerminalSession session)
+    {
+      _ptySessionCache.Remove(terminalId);
+      if (!session.IsDisposed)
+      {
+        session.Dispose();
+      }
+      return true;
+    }
+    return false;
+  }
 
   public async Task<Result> CreateSession(Guid terminalId, string viewerConnectionId)
   {
@@ -82,6 +165,33 @@ internal class TerminalStore(
       logger.LogError(ex, "Error while writing terminal input.");
       return Result.Fail("An error occurred.");
     }
+  }
+
+  private static MemoryCacheEntryOptions GetPtyEntryOptions(PtyTerminalSession ptySession)
+  {
+    var entryOptions = new MemoryCacheEntryOptions
+    {
+      SlidingExpiration = TimeSpan.FromMinutes(30)
+    };
+
+    var cts = new CancellationTokenSource();
+    ptySession.ProcessExited += (_, _) =>
+    {
+      cts.Cancel();
+      cts.Dispose();
+    };
+    var expirationToken = new CancellationChangeToken(cts.Token);
+    entryOptions.ExpirationTokens.Add(expirationToken);
+
+    entryOptions.RegisterPostEvictionCallback((_, value, _, _) =>
+    {
+      if (value is PtyTerminalSession { IsDisposed: false } session)
+      {
+        session.Dispose();
+      }
+    });
+
+    return entryOptions;
   }
 
   private static MemoryCacheEntryOptions GetEntryOptions(TerminalSession terminalSession)

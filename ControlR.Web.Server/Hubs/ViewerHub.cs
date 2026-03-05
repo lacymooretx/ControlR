@@ -60,6 +60,27 @@ public class ViewerHub(
     }
   }
 
+  public async Task ClosePtySession(Guid deviceId, Guid terminalSessionId)
+  {
+    try
+    {
+      if (await TryAuthorizeAgainstDevice(deviceId) is not { IsSuccess: true } authResult)
+      {
+        return;
+      }
+
+      await _agentHub.Clients
+        .Client(authResult.Value.ConnectionId)
+        .ClosePtySession(terminalSessionId);
+
+      AuditHubAction(AuditEventTypes.Terminal, AuditActions.End, authResult.Value, terminalSessionId);
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while closing PTY session.");
+    }
+  }
+
   public async Task CloseTerminalSession(Guid deviceId, Guid terminalSessionId)
   {
     try
@@ -78,6 +99,33 @@ public class ViewerHub(
     catch (Exception ex)
     {
       _logger.LogError(ex, "Error while closing terminal session.");
+    }
+  }
+
+  public async Task<Result> CreatePtySession(Guid deviceId, Guid terminalSessionId, int cols, int rows)
+  {
+    try
+    {
+      if (await TryAuthorizeAgainstDevice(deviceId) is not { IsSuccess: true } authResult)
+      {
+        return Result.Fail("Forbidden.");
+      }
+
+      var result = await _agentHub.Clients
+        .Client(authResult.Value.ConnectionId)
+        .CreatePtySession(terminalSessionId, Context.ConnectionId, cols, rows);
+
+      if (result.IsSuccess)
+      {
+        AuditHubAction(AuditEventTypes.Terminal, AuditActions.Start, authResult.Value, terminalSessionId);
+      }
+
+      return result;
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while creating PTY session.");
+      return Result.Fail("An error occurred.");
     }
   }
 
@@ -728,6 +776,50 @@ public class ViewerHub(
     catch (Exception ex)
     {
       _logger.LogError(ex, "Error while sending power state change.");
+    }
+  }
+
+  public async Task<Result> ResizePty(Guid deviceId, PtyResizeDto dto)
+  {
+    try
+    {
+      if (await TryAuthorizeAgainstDevice(deviceId) is not { IsSuccess: true } authResult)
+      {
+        return Result.Fail("Unauthorized.");
+      }
+
+      var dtoWithViewer = dto with { ViewerConnectionId = Context.ConnectionId };
+
+      return await _agentHub.Clients
+        .Client(authResult.Value.ConnectionId)
+        .ResizePty(dtoWithViewer);
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while resizing PTY.");
+      return Result.Fail("Agent could not be reached.");
+    }
+  }
+
+  public async Task<Result> SendPtyInput(Guid deviceId, PtyInputDto dto)
+  {
+    try
+    {
+      if (await TryAuthorizeAgainstDevice(deviceId) is not { IsSuccess: true } authResult)
+      {
+        return Result.Fail("Unauthorized.");
+      }
+
+      var dtoWithViewer = dto with { ViewerConnectionId = Context.ConnectionId };
+
+      return await _agentHub.Clients
+        .Client(authResult.Value.ConnectionId)
+        .ReceivePtyInput(dtoWithViewer);
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while sending PTY input.");
+      return Result.Fail("Agent could not be reached.");
     }
   }
 

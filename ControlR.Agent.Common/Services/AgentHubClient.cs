@@ -97,6 +97,21 @@ internal class AgentHubClient(
     }
   }
 
+  public Task ClosePtySession(Guid terminalSessionId)
+  {
+    try
+    {
+      _logger.LogInformation("Closing PTY session {TerminalSessionId}.", terminalSessionId);
+      _ = _terminalStore.TryRemovePty(terminalSessionId);
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while closing PTY session {TerminalSessionId}.", terminalSessionId);
+    }
+
+    return Task.CompletedTask;
+  }
+
   public Task CloseTerminalSession(Guid terminalSessionId)
   {
     try
@@ -243,6 +258,22 @@ internal class AgentHubClient(
     {
       _logger.LogError(ex, "Error while creating remote control session.");
       return Result.Fail("An error occurred on the agent while creating remote control session.");
+    }
+  }
+
+  public async Task<Result> CreatePtySession(Guid terminalSessionId, string viewerConnectionId, int cols, int rows)
+  {
+    try
+    {
+      _logger.LogInformation("PTY session started. Viewer Connection ID: {ConnectionId}, Size: {Cols}x{Rows}",
+        viewerConnectionId, cols, rows);
+
+      return await _terminalStore.CreatePtySession(terminalSessionId, viewerConnectionId, cols, rows);
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while creating PTY session.");
+      return Result.Fail("An error occurred.");
     }
   }
 
@@ -544,6 +575,22 @@ internal class AgentHubClient(
     await _powerControl.ChangeState(changeType);
   }
 
+  public async Task<Result> ReceivePtyInput(PtyInputDto dto)
+  {
+    try
+    {
+      return await _terminalStore.WritePtyInput(
+        dto.TerminalId,
+        dto.Data,
+        _appLifetime.ApplicationStopping);
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while receiving PTY input.");
+      return Result.Fail("An error occurred.");
+    }
+  }
+
   public async Task<Result> ReceiveTerminalInput(TerminalInputDto dto)
   {
     try
@@ -560,6 +607,19 @@ internal class AgentHubClient(
     {
       _logger.LogError(ex, "Error while creating terminal session.");
       return Result.Fail("An error occurred.");
+    }
+  }
+
+  public Task<Result> ResizePty(PtyResizeDto dto)
+  {
+    try
+    {
+      return Task.FromResult(_terminalStore.ResizePty(dto.TerminalId, dto.Cols, dto.Rows));
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while resizing PTY.");
+      return Task.FromResult(Result.Fail("An error occurred."));
     }
   }
 

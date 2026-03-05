@@ -14,6 +14,7 @@ public interface IAgentHub
   Task SendDirectoryContentsStream(Guid streamId, bool directoryExists, ChannelReader<FileSystemEntryDto[]> entryChunks);
   Task<Result> SendFileContentStream(Guid streamId, ChannelReader<byte[]> fileChunks);
   Task SendSubdirectoriesStream(Guid streamId, ChannelReader<FileSystemEntryDto[]> subdirectoryChunks);
+  Task SendPtyOutputToViewer(string viewerConnectionId, PtyOutputDto outputDto);
   Task SendTerminalOutputToViewer(string viewerConnectionId, TerminalOutputDto outputDto);
   Task<Result<DeviceResponseDto>> UpdateDevice(DeviceUpdateRequestDto agentDto);
 }

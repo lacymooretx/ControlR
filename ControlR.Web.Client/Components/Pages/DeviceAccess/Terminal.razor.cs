@@ -17,6 +17,8 @@ public partial class Terminal : IAsyncDisposable
   };
   private readonly string _commandInputElementId = $"terminal-input-{Guid.NewGuid()}";
 
+  private string _terminalMode = "pty";
+  private bool _powershellSessionCreated;
   private MudTextField<string>? _commandInputElement;
   // Provided by UI.  Never null
   private MudAutocomplete<PwshCompletionMatch> _completionsAutoComplete = null!;
@@ -64,6 +66,20 @@ public partial class Terminal : IAsyncDisposable
   {
     await base.OnAfterRenderAsync(firstRender);
 
+    if (_terminalMode == "powershell" && !_powershellSessionCreated)
+    {
+      _powershellSessionCreated = true;
+      var result = await ViewerHub.Server.CreateTerminalSession(
+        DeviceState.CurrentDevice.Id,
+        TerminalState.Id);
+
+      if (!result.IsSuccess)
+      {
+        Snackbar.Add("Failed to start PowerShell session", Severity.Error);
+        Logger.LogResult(result);
+      }
+    }
+
     // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
     if (_commandInputElement is not null && !_taboutPrevented)
     {
@@ -88,15 +104,8 @@ public partial class Terminal : IAsyncDisposable
 
       Messenger.Register<DtoReceivedMessage<TerminalOutputDto>>(this, HandleTerminalOutputMessage);
 
-      var result = await ViewerHub.Server.CreateTerminalSession(
-        DeviceState.CurrentDevice.Id,
-        TerminalState.Id);
-
-      if (!result.IsSuccess)
-      {
-        Snackbar.Add("Failed to start terminal", Severity.Error);
-        Logger.LogResult(result);
-      }
+      // PowerShell session is created lazily when switching to powershell mode.
+      // PTY session is managed by the PtyTerminal component.
     }
     catch (Exception ex)
     {

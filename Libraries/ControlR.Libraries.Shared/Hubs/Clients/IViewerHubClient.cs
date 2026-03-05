@@ -11,5 +11,6 @@ public interface IViewerHubClient
   Task ReceiveDeviceUpdate(DeviceResponseDto deviceDto);
   Task ReceiveScriptExecutionProgress(ScriptExecutionResultHubDto result);
   Task ReceiveServerStats(ServerStatsDto serverStats);
+  Task ReceivePtyOutput(PtyOutputDto output);
   Task ReceiveTerminalOutput(TerminalOutputDto output);
 }

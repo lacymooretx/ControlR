@@ -348,6 +348,20 @@ public class AgentHub(
     }
   }
 
+  public async Task SendPtyOutputToViewer(string viewerConnectionId, PtyOutputDto outputDto)
+  {
+    try
+    {
+      await _viewerHub.Clients
+        .Client(viewerConnectionId)
+        .ReceivePtyOutput(outputDto);
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while sending PTY output to viewer.");
+    }
+  }
+
   public async Task SendTerminalOutputToViewer(string viewerConnectionId, TerminalOutputDto outputDto)
   {
     try
