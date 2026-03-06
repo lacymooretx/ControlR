@@ -33,15 +33,10 @@ public class AppOptions
   public string RecordingsStoragePath { get; init; } = "./data/recordings";
   public bool RequireUserEmailConfirmation { get; init; }
   public string ToolboxStoragePath { get; init; } = "./data/toolbox";
-  public bool SmtpCheckCertificateRevocation { get; init; } = true;
+  [ProtectedDataClassification]
+  public string? Smtp2GoApiKey { get; init; }
   public string? SmtpDisplayName { get; init; }
   public string? SmtpEmail { get; init; }
-  public string? SmtpHost { get; init; }
-  public string? SmtpLocalDomain { get; init; }
-  [ProtectedDataClassification]
-  public string? SmtpPassword { get; init; }
-  public int SmtpPort { get; init; } = 587;
-  public string? SmtpUserName { get; init; }
   public bool UseHttpLogging { get; init; }
   public bool UseInMemoryDatabase { get; init; }
 }

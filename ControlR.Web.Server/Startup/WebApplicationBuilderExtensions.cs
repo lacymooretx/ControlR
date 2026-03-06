@@ -318,6 +318,7 @@ public static class WebApplicationBuilderExtensions
     builder.Services.AddSingleton<IWaiter, Waiter>();
     builder.Services.AddSingleton<IServerStatsProvider, ServerStatsProvider>();
     builder.Services.AddSingleton<IUserRegistrationProvider, UserRegistrationProvider>();
+    builder.Services.AddHttpClient("Smtp2Go");
     builder.Services.AddSingleton<IEmailSender, EmailSender>();
     builder.Services.AddSingleton<IHubStreamStore, HubStreamStore>();
     builder.Services.AddWebSocketRelay(options =>

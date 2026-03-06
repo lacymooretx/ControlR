@@ -1,24 +1,20 @@
-﻿using MailKit.Net.Smtp;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity.UI.Services;
-using MimeKit;
-using MimeKit.Text;
 using System.Diagnostics.CodeAnalysis;
+using System.Net.Http.Json;
+using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Identity.UI.Services;
 
 namespace ControlR.Web.Server.Services;
 
 public class EmailSender(
-  IWebHostEnvironment webHostEnvironment,
+  IHttpClientFactory httpClientFactory,
   IHttpContextAccessor httpContextAccessor,
   IOptionsMonitor<AppOptions> appOptions,
   ILogger<EmailSender> logger) : IEmailSender
 {
-
   private readonly IOptionsMonitor<AppOptions> _appOptions = appOptions;
+  private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
   private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
   private readonly ILogger<EmailSender> _logger = logger;
-  private readonly IWebHostEnvironment _webHostEnvironment = webHostEnvironment;
-
 
   public async Task SendEmailAsync(string email, string subject, string htmlMessage)
   {
@@ -29,68 +25,71 @@ public class EmailSender(
       if (currentOptions.DisableEmailSending)
       {
         _logger.LogInformation(
-          "Email sending is disabled.  Email to \"{ToEmail}\" with subject \"{Subject}\" will not be sent.", 
-          email, 
+          "Email sending is disabled.  Email to \"{ToEmail}\" with subject \"{Subject}\" will not be sent.",
+          email,
           subject);
 
         return;
       }
 
-      if (!ValidateOptions())
+      if (string.IsNullOrWhiteSpace(currentOptions.Smtp2GoApiKey))
       {
-        _logger.LogCritical("SMTP options are not properly configured.  Unable to send email.");
+        _logger.LogCritical("SMTP2GO API key is not configured. Unable to send email.");
         return;
       }
 
-      var message = new MimeMessage();
-      message.From.Add(new MailboxAddress(currentOptions.SmtpDisplayName, currentOptions.SmtpEmail));
-      message.To.Add(MailboxAddress.Parse(email));
-      message.ReplyTo.Add(MailboxAddress.Parse(currentOptions.SmtpEmail));
-      message.Subject = subject;
-
-      if (TryGetLogoHtml(out var logoHtml))
+      if (string.IsNullOrWhiteSpace(currentOptions.SmtpEmail))
       {
-        message.Body = new TextPart(TextFormat.Html)
-        {
-          Text = $"{logoHtml}<br/>{htmlMessage}"
-        };
-      }
-      else
-      {
-        var builder = new BodyBuilder 
-        { 
-          HtmlBody = 
-            $"<img src='cid:logo' alt='Company Logo' width='256' /> <br /> {htmlMessage}" 
-        };
-        var logoFile = _webHostEnvironment.WebRootFileProvider.GetFileInfo("images/company-logo.png");
-        if (logoFile.Exists)
-        {
-          var logo = builder.LinkedResources.Add(logoFile.PhysicalPath!);
-          logo.ContentId = "logo";
-        }
-        message.Body = builder.ToMessageBody();
+        _logger.LogCritical("Sender email (SmtpEmail) is not configured. Unable to send email.");
+        return;
       }
 
-      using var client = new SmtpClient();
+      var body = PrepareHtmlBody(htmlMessage);
 
-      if (!string.IsNullOrWhiteSpace(currentOptions.SmtpLocalDomain))
+      var request = new Smtp2GoSendRequest
       {
-        client.LocalDomain = currentOptions.SmtpLocalDomain;
+        Sender = FormatSender(currentOptions),
+        To = [email],
+        Subject = subject,
+        HtmlBody = body
+      };
+
+      using var client = _httpClientFactory.CreateClient("Smtp2Go");
+      client.DefaultRequestHeaders.Add("X-Smtp2go-Api-Key", currentOptions.Smtp2GoApiKey);
+
+      var response = await client.PostAsJsonAsync(
+        "https://api.smtp2go.com/v3/email/send",
+        request,
+        Smtp2GoJsonContext.Default.Smtp2GoSendRequest);
+
+      if (!response.IsSuccessStatusCode)
+      {
+        var errorBody = await response.Content.ReadAsStringAsync();
+        _logger.LogError(
+          "SMTP2GO API returned {StatusCode}: {ErrorBody}",
+          response.StatusCode,
+          errorBody);
+        throw new InvalidOperationException($"SMTP2GO API error: {response.StatusCode}");
       }
 
-      client.CheckCertificateRevocation = currentOptions.SmtpCheckCertificateRevocation;
+      var result = await response.Content.ReadFromJsonAsync(
+        Smtp2GoJsonContext.Default.Smtp2GoSendResponse);
 
-      await client.ConnectAsync(currentOptions.SmtpHost, currentOptions.SmtpPort);
-
-      if (!string.IsNullOrWhiteSpace(currentOptions.SmtpUserName) &&
-          !string.IsNullOrWhiteSpace(currentOptions.SmtpPassword))
+      if (result?.Data?.Failed > 0)
       {
-        await client.AuthenticateAsync(currentOptions.SmtpUserName, currentOptions.SmtpPassword);
+        _logger.LogError(
+          "SMTP2GO reported {FailedCount} failure(s) for email to {ToEmail}: {Failures}",
+          result.Data.Failed,
+          email,
+          string.Join(", ", result.Data.Failures ?? []));
+        throw new InvalidOperationException($"SMTP2GO send failed for {email}");
       }
-      await client.SendAsync(message);
-      await client.DisconnectAsync(true);
 
-      _logger.LogInformation("Email successfully sent to {ToEmail}.  Subject: \"{Subject}\".", email, subject);
+      _logger.LogInformation(
+        "Email successfully sent to {ToEmail} via SMTP2GO. Subject: \"{Subject}\", EmailId: {EmailId}",
+        email,
+        subject,
+        result?.Data?.EmailId);
     }
     catch (Exception ex)
     {
@@ -99,9 +98,25 @@ public class EmailSender(
     }
   }
 
+  private static string FormatSender(AppOptions options)
+  {
+    if (!string.IsNullOrWhiteSpace(options.SmtpDisplayName))
+    {
+      return $"{options.SmtpDisplayName} <{options.SmtpEmail}>";
+    }
+    return options.SmtpEmail!;
+  }
 
+  private string PrepareHtmlBody(string htmlMessage)
+  {
+    if (TryGetLogoHtml(out var logoHtml))
+    {
+      return $"{logoHtml}<br/>{htmlMessage}";
+    }
+    return htmlMessage;
+  }
 
-  private bool TryGetLogoHtml([NotNullWhen(true)]out string? logoHtml)
+  private bool TryGetLogoHtml([NotNullWhen(true)] out string? logoHtml)
   {
     if (_httpContextAccessor.HttpContext?.Request is not { } request)
     {
@@ -118,22 +133,54 @@ public class EmailSender(
     var imageUrl = new Uri(request.ToOrigin(), "/images/company-logo.png");
 
     logoHtml = $"""
-      <img 
-        src="{imageUrl}" 
+      <img
+        src="{imageUrl}"
         alt="Company Logo"
         width="256" />
     """;
     return true;
   }
-
-  private bool ValidateOptions()
-  {
-    if (string.IsNullOrWhiteSpace(_appOptions.CurrentValue.SmtpDisplayName) ||
-        string.IsNullOrWhiteSpace(_appOptions.CurrentValue.SmtpEmail) ||
-        string.IsNullOrWhiteSpace(_appOptions.CurrentValue.SmtpHost))
-    {
-      return false;
-    }
-    return true;
-  }
 }
+
+public class Smtp2GoSendRequest
+{
+  [JsonPropertyName("sender")]
+  public required string Sender { get; init; }
+
+  [JsonPropertyName("to")]
+  public required string[] To { get; init; }
+
+  [JsonPropertyName("subject")]
+  public required string Subject { get; init; }
+
+  [JsonPropertyName("html_body")]
+  public string? HtmlBody { get; init; }
+}
+
+public class Smtp2GoSendResponse
+{
+  [JsonPropertyName("request_id")]
+  public string? RequestId { get; init; }
+
+  [JsonPropertyName("data")]
+  public Smtp2GoSendResponseData? Data { get; init; }
+}
+
+public class Smtp2GoSendResponseData
+{
+  [JsonPropertyName("succeeded")]
+  public int Succeeded { get; init; }
+
+  [JsonPropertyName("failed")]
+  public int Failed { get; init; }
+
+  [JsonPropertyName("failures")]
+  public string[]? Failures { get; init; }
+
+  [JsonPropertyName("email_id")]
+  public string? EmailId { get; init; }
+}
+
+[JsonSerializable(typeof(Smtp2GoSendRequest))]
+[JsonSerializable(typeof(Smtp2GoSendResponse))]
+internal partial class Smtp2GoJsonContext : JsonSerializerContext;
