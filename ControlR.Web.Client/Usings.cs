@@ -37,4 +37,6 @@ global using ControlR.Libraries.Viewer.Common.Enums;
 global using ControlR.Libraries.Viewer.Common.Models;
 global using ControlR.Libraries.WebSocketRelay.Client;
 global using Microsoft.AspNetCore.Components;
+global using Microsoft.AspNetCore.Components.Forms;
+global using MudBlazor.Utilities;
 global using ControlR.Web.Client.Extensions;
