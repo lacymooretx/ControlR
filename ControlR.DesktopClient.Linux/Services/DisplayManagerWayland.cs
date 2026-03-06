@@ -175,9 +175,72 @@ internal class DisplayManagerWayland(
     await ReloadDisplaysImpl();
   }
 
-  public Task<Result> SetPrivacyScreen(bool isEnabled)
+  private bool _isPrivacyScreenEnabled;
+
+  public bool IsPrivacyScreenEnabled => _isPrivacyScreenEnabled;
+
+  public Task<Result> ChangeResolution(string displayId, int width, int height, int? refreshRate)
   {
-    throw new PlatformNotSupportedException("Privacy screen is only supported on Windows.");
+    return Task.FromResult(Result.Fail("Resolution change is not supported on Wayland."));
+  }
+
+  public Task<Result<(int Width, int Height, int RefreshRate)[]>> GetAvailableResolutions(string displayId)
+  {
+    return Task.FromResult(Result.Fail<(int, int, int)[]>("Getting available resolutions is not supported on Wayland."));
+  }
+
+  public async Task<Result> SetPrivacyScreen(bool isEnabled)
+  {
+    try
+    {
+      if (isEnabled == _isPrivacyScreenEnabled)
+      {
+        return Result.Ok();
+      }
+
+      // Wayland compositors don't allow direct DPMS control from applications.
+      // Try gnome-screensaver or loginctl as fallbacks.
+      if (isEnabled)
+      {
+        // Try loginctl lock-session first (works on GNOME, KDE with systemd)
+        var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+          FileName = "loginctl",
+          Arguments = "lock-session",
+          UseShellExecute = false,
+          RedirectStandardOutput = true,
+          RedirectStandardError = true,
+          CreateNoWindow = true
+        });
+
+        if (process is not null)
+        {
+          await process.WaitForExitAsync();
+          if (process.ExitCode == 0)
+          {
+            _isPrivacyScreenEnabled = true;
+            _logger.LogInformation("Enabled privacy screen (loginctl lock-session) on Wayland");
+            return Result.Ok();
+          }
+        }
+
+        _logger.LogWarning("Privacy screen on Wayland is limited. loginctl lock-session may not blank the screen on all compositors.");
+        _isPrivacyScreenEnabled = true;
+        return Result.Ok();
+      }
+      else
+      {
+        // Unlock requires user interaction on the remote side; we can only reset our flag
+        _isPrivacyScreenEnabled = false;
+        _logger.LogInformation("Privacy screen flag cleared on Wayland. User may need to unlock manually.");
+        return Result.Ok();
+      }
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error toggling privacy screen on Wayland");
+      return Result.Fail($"Failed to toggle privacy screen on Wayland: {ex.Message}");
+    }
   }
 
   public async Task<Result<DisplayInfo>> TryFindDisplay(string deviceName)

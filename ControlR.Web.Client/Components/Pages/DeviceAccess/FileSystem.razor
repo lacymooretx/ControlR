@@ -7,7 +7,7 @@
 @attribute [Authorize]
 @inherits JsInteropableComponent
 
-<div class="file-system-container h-100">
+<div @ref="_dropZoneRef" class="file-system-container h-100">
   <div class="address-bar-container">
     <MudTextField @bind-Value="AddressBarValue" Label="Address" Variant="Variant.Outlined" Immediate
       Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.SubdirectoryArrowRight"
@@ -62,6 +62,10 @@
               <MudIconButton Icon="@Icons.Material.Filled.Download" Color="Color.Default" Size="Size.Small"
                 OnClick="OnDownloadClick" Disabled="@(SelectedItems.Count == 0)" />
             </MudTooltip>
+            <MudTooltip Text="Move">
+              <MudIconButton Icon="@Icons.Material.Filled.DriveFileMove" Color="Color.Default" Size="Size.Small"
+                OnClick="OnMoveFileClick" Disabled="@(SelectedItems.Count != 1)" />
+            </MudTooltip>
             <MudTooltip Text="Delete">
               <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
                 OnClick="OnDeleteClick" Disabled="@(SelectedItems.Count == 0 || IsDeleteInProgress)" />
@@ -81,6 +85,11 @@
               Class="me-2" Size="Size.Small" OnClick="OnDownloadClick"
               Disabled="@(SelectedItems.Count == 0)">
               Download
+            </MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" StartIcon="@Icons.Material.Filled.DriveFileMove"
+              Class="me-2" Size="Size.Small" OnClick="OnMoveFileClick"
+              Disabled="@(SelectedItems.Count != 1)">
+              Move
             </MudButton>
             <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
               Class="me-2" Size="Size.Small" OnClick="OnDeleteClick"
@@ -135,7 +144,20 @@
       </div>
     </RightPanel>
   </GridSplitter>
-</div>
 
-<!-- Hidden file input for uploads -->
-<InputFile @ref="_fileInputRef" OnChange="OnFilesSelected" multiple style="display: none;" accept="*/*" />
+  @if (_isDragOver)
+  {
+    <div class="drop-zone-overlay">
+      <div class="drop-zone-content">
+        <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Large" />
+        <MudText Typo="Typo.h6">Drop files here to upload</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+          Files will be uploaded to the current directory
+        </MudText>
+      </div>
+    </div>
+  }
+
+  <!-- Hidden file input for uploads -->
+  <InputFile @ref="_fileInputRef" OnChange="OnFilesSelected" multiple style="display: none;" accept="*/*" />
+</div>

@@ -113,9 +113,85 @@ internal class DisplayManagerX11 : IDisplayManager
     return Task.CompletedTask;
   }
 
-  public Task<Result> SetPrivacyScreen(bool isEnabled)
+  private bool _isPrivacyScreenEnabled;
+
+  public bool IsPrivacyScreenEnabled => _isPrivacyScreenEnabled;
+
+  public Task<Result> ChangeResolution(string displayId, int width, int height, int? refreshRate)
   {
-    throw new PlatformNotSupportedException("Privacy screen is only supported on Windows.");
+    return Task.FromResult(Result.Fail("Resolution change is not yet supported on Linux X11."));
+  }
+
+  public Task<Result<(int Width, int Height, int RefreshRate)[]>> GetAvailableResolutions(string displayId)
+  {
+    return Task.FromResult(Result.Fail<(int, int, int)[]>("Getting available resolutions is not yet supported on Linux X11."));
+  }
+
+  public async Task<Result> SetPrivacyScreen(bool isEnabled)
+  {
+    try
+    {
+      if (isEnabled == _isPrivacyScreenEnabled)
+      {
+        return Result.Ok();
+      }
+
+      if (isEnabled)
+      {
+        // Use xset to turn off displays via DPMS
+        var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+          FileName = "xset",
+          Arguments = "dpms force off",
+          UseShellExecute = false,
+          RedirectStandardOutput = true,
+          RedirectStandardError = true,
+          CreateNoWindow = true
+        });
+
+        if (process is not null)
+        {
+          await process.WaitForExitAsync();
+          if (process.ExitCode != 0)
+          {
+            var stderr = await process.StandardError.ReadToEndAsync();
+            _logger.LogWarning("xset dpms force off failed: {Error}", stderr);
+            return Result.Fail($"Failed to blank screen: {stderr}");
+          }
+        }
+
+        _isPrivacyScreenEnabled = true;
+        _logger.LogInformation("Enabled privacy screen (DPMS off) on Linux X11");
+        return Result.Ok();
+      }
+      else
+      {
+        // Wake displays via DPMS
+        var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+          FileName = "xset",
+          Arguments = "dpms force on",
+          UseShellExecute = false,
+          RedirectStandardOutput = true,
+          RedirectStandardError = true,
+          CreateNoWindow = true
+        });
+
+        if (process is not null)
+        {
+          await process.WaitForExitAsync();
+        }
+
+        _isPrivacyScreenEnabled = false;
+        _logger.LogInformation("Disabled privacy screen (DPMS on) on Linux X11");
+        return Result.Ok();
+      }
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error toggling privacy screen on Linux X11");
+      return Result.Fail($"Failed to {(isEnabled ? "enable" : "disable")} privacy screen: {ex.Message}");
+    }
   }
 
   public Task<Result<DisplayInfo>> TryFindDisplay(string deviceName)

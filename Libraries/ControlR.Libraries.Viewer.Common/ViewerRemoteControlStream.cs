@@ -10,6 +10,8 @@ public interface IViewerRemoteControlStream : IManagedRelayStream
 {
   Task RequestClipboardText(Guid sessionId, CancellationToken cancellationToken);
   Task RequestKeyFrame(CancellationToken cancellationToken);
+  Task SendAnnotationClear(CancellationToken cancellationToken);
+  Task SendAnnotationStroke(float[] pointsX, float[] pointsY, string color, float thickness, Guid strokeId, CancellationToken cancellationToken);
   Task SendChangeDisplaysRequest(string displayId, CancellationToken cancellationToken);
   Task SendClipboardText(string text, Guid sessionId, CancellationToken cancellationToken);
   Task SendCloseStreamingSession(CancellationToken cancellationToken);
@@ -23,8 +25,13 @@ public interface IViewerRemoteControlStream : IManagedRelayStream
   Task SendToggleBlockInput(bool isEnabled, CancellationToken cancellationToken);
   Task SendTogglePrivacyScreen(bool isEnabled, CancellationToken cancellationToken);
   Task SendTypeText(string text, CancellationToken cancellationToken);
+  Task SendGetAvailableResolutions(string displayId, CancellationToken cancellationToken);
+  Task SendChangeResolution(string displayId, int width, int height, int? refreshRate, CancellationToken cancellationToken);
   Task SendWheelScroll(double percentX, double percentY, double scrollY, double scrollX,
     CancellationToken cancellationToken);
+  Task SendGetPrinters(CancellationToken cancellationToken);
+  Task SendPrintJob(string printerName, string fileName, byte[] fileData, int copies, CancellationToken cancellationToken);
+  Task SendAudioControl(bool isEnabled, int sampleRate, int channels, CancellationToken cancellationToken);
 }
 
 public class ViewerRemoteControlStream(
@@ -45,6 +52,28 @@ public class ViewerRemoteControlStream(
       {
         var dto = new RequestClipboardTextDto();
         var wrapper = DtoWrapper.Create(dto, DtoType.RequestClipboardText);
+        await Send(wrapper, cancellationToken);
+      });
+  }
+
+  public async Task SendAnnotationClear(CancellationToken cancellationToken)
+  {
+    await TrySend(
+      async () =>
+      {
+        var dto = new AnnotationClearDto();
+        var wrapper = DtoWrapper.Create(dto, DtoType.AnnotationClear);
+        await Send(wrapper, cancellationToken);
+      });
+  }
+
+  public async Task SendAnnotationStroke(float[] pointsX, float[] pointsY, string color, float thickness, Guid strokeId, CancellationToken cancellationToken)
+  {
+    await TrySend(
+      async () =>
+      {
+        var dto = new AnnotationStrokeDto(pointsX, pointsY, color, thickness, strokeId);
+        var wrapper = DtoWrapper.Create(dto, DtoType.AnnotationStroke);
         await Send(wrapper, cancellationToken);
       });
   }
@@ -187,6 +216,28 @@ public class ViewerRemoteControlStream(
       });
   }
 
+  public async Task SendGetAvailableResolutions(string displayId, CancellationToken cancellationToken)
+  {
+    await TrySend(
+      async () =>
+      {
+        var dto = new GetAvailableResolutionsDto(displayId);
+        var wrapper = DtoWrapper.Create(dto, DtoType.GetAvailableResolutions);
+        await Send(wrapper, cancellationToken);
+      });
+  }
+
+  public async Task SendChangeResolution(string displayId, int width, int height, int? refreshRate, CancellationToken cancellationToken)
+  {
+    await TrySend(
+      async () =>
+      {
+        var dto = new ChangeResolutionDto(displayId, width, height, refreshRate);
+        var wrapper = DtoWrapper.Create(dto, DtoType.ChangeResolution);
+        await Send(wrapper, cancellationToken);
+      });
+  }
+
   public async Task SendWheelScroll(double percentX, double percentY, double scrollY, double scrollX,
     CancellationToken cancellationToken)
   {
@@ -195,6 +246,39 @@ public class ViewerRemoteControlStream(
       {
         var dto = new WheelScrollDto(percentX, percentY, scrollY, scrollX);
         var wrapper = DtoWrapper.Create(dto, DtoType.WheelScroll);
+        await Send(wrapper, cancellationToken);
+      });
+  }
+
+  public async Task SendGetPrinters(CancellationToken cancellationToken)
+  {
+    await TrySend(
+      async () =>
+      {
+        var dto = new GetPrintersDto();
+        var wrapper = DtoWrapper.Create(dto, DtoType.GetPrinters);
+        await Send(wrapper, cancellationToken);
+      });
+  }
+
+  public async Task SendPrintJob(string printerName, string fileName, byte[] fileData, int copies, CancellationToken cancellationToken)
+  {
+    await TrySend(
+      async () =>
+      {
+        var dto = new PrintJobDto(printerName, fileName, fileData, copies);
+        var wrapper = DtoWrapper.Create(dto, DtoType.PrintJob);
+        await Send(wrapper, cancellationToken);
+      });
+  }
+
+  public async Task SendAudioControl(bool isEnabled, int sampleRate, int channels, CancellationToken cancellationToken)
+  {
+    await TrySend(
+      async () =>
+      {
+        var dto = new AudioControlDto(isEnabled, sampleRate, channels);
+        var wrapper = DtoWrapper.Create(dto, DtoType.AudioControl);
         await Send(wrapper, cancellationToken);
       });
   }

@@ -1,0 +1,42 @@
+@inherits JsInteropableComponent
+
+<div class="annotation-toolbar @(IsActive ? "" : "d-none")">
+  <div class="d-flex align-center gap-2 pa-1">
+    @foreach (var color in _colors)
+    {
+      <MudIconButton Icon="@(Icons.Material.Filled.Circle)"
+                     Size="Size.Small"
+                     Style="@($"color: {color}; {(color == _selectedColor ? "outline: 2px solid white; outline-offset: 1px;" : "")}")"
+                     OnClick="@(() => HandleColorSelected(color))" />
+    }
+
+    <MudDivider Vertical FlexItem />
+
+    @foreach (var (label, thickness) in _thicknessOptions)
+    {
+      <MudButton Variant="@(thickness == _selectedThickness ? Variant.Filled : Variant.Outlined)"
+                 Color="Color.Default"
+                 Size="Size.Small"
+                 OnClick="@(() => HandleThicknessSelected(thickness))">
+        @label
+      </MudButton>
+    }
+
+    <MudDivider Vertical FlexItem />
+
+    <MudTooltip Text="Clear all annotations">
+      <MudIconButton Icon="@(Icons.Material.Filled.Delete)"
+                     Size="Size.Small"
+                     Color="Color.Error"
+                     OnClick="HandleClearClicked" />
+    </MudTooltip>
+  </div>
+</div>
+
+<canvas @ref="_annotationCanvasRef"
+        id="@_annotationCanvasId"
+        class="annotation-overlay @(IsActive ? "active" : "")"
+        width="@CanvasWidth"
+        height="@CanvasHeight"
+        style="@CanvasStyle">
+</canvas>

@@ -9,6 +9,7 @@ public interface IFileManager
   Task<FileReferenceResult> CreateDirectory(string directoryPath);
   Task<FileReferenceResult> DeleteFileSystemEntry(string targetPath);
   Task<DirectoryContentsResult> GetDirectoryContents(string directoryPath);
+  Task<FileReferenceResult> MoveFileSystemEntry(string sourcePath, string destinationPath);
   Task<List<LogFileGroupDto>> GetLogFiles();
   Task<PathSegmentsResponseDto> GetPathSegments(string targetPath);
   Task<FileSystemEntryDto[]> GetRootDrives();
@@ -117,6 +118,61 @@ internal class FileManager(
     catch (Exception ex)
     {
       _logger.LogError(ex, "Error deleting file system entry: {FilePath}", targetPath);
+      return Task.FromResult(FileReferenceResult.Fail(ex.Message));
+    }
+  }
+
+  public Task<FileReferenceResult> MoveFileSystemEntry(string sourcePath, string destinationPath)
+  {
+    try
+    {
+      if (string.IsNullOrWhiteSpace(sourcePath))
+      {
+        return Task.FromResult(FileReferenceResult.Fail("Source path cannot be empty"));
+      }
+
+      if (string.IsNullOrWhiteSpace(destinationPath))
+      {
+        return Task.FromResult(FileReferenceResult.Fail("Destination path cannot be empty"));
+      }
+
+      if (string.Equals(sourcePath, destinationPath, StringComparison.OrdinalIgnoreCase))
+      {
+        return Task.FromResult(FileReferenceResult.Fail("Source and destination paths are the same"));
+      }
+
+      if (_fileSystem.DirectoryExists(sourcePath))
+      {
+        if (_fileSystem.DirectoryExists(destinationPath) || _fileSystem.FileExists(destinationPath))
+        {
+          return Task.FromResult(FileReferenceResult.Fail("Destination already exists"));
+        }
+
+        Directory.Move(sourcePath, destinationPath);
+        _logger.LogInformation("Successfully moved directory: {Source} -> {Destination}", sourcePath, destinationPath);
+      }
+      else if (_fileSystem.FileExists(sourcePath))
+      {
+        if (_fileSystem.FileExists(destinationPath) || _fileSystem.DirectoryExists(destinationPath))
+        {
+          return Task.FromResult(FileReferenceResult.Fail("Destination already exists"));
+        }
+
+        _fileSystem.MoveFile(sourcePath, destinationPath, false);
+        _logger.LogInformation("Successfully moved file: {Source} -> {Destination}", sourcePath, destinationPath);
+      }
+      else
+      {
+        return Task.FromResult(FileReferenceResult.Fail("Source path does not exist"));
+      }
+
+      return FileReferenceResult
+        .Ok(destinationPath, Path.GetFileName(destinationPath))
+        .AsTaskResult();
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error moving file system entry: {Source} -> {Destination}", sourcePath, destinationPath);
       return Task.FromResult(FileReferenceResult.Fail(ex.Message));
     }
   }

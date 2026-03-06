@@ -62,6 +62,9 @@
     <MudNavLink Href="@(ClientRoutes.TenantSettings)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings">
       Tenant Settings
     </MudNavLink>
+    <MudNavLink Href="@(ClientRoutes.Branding)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Palette">
+      Branding
+    </MudNavLink>
     <MudNavLink Href="@(ClientRoutes.Scripts)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Code">
       Scripts
     </MudNavLink>
@@ -74,14 +77,41 @@
     <MudNavLink Href="@(ClientRoutes.AlertRules)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.NotificationsActive">
       Alert Rules
     </MudNavLink>
+    <MudNavLink Href="@(ClientRoutes.Suggestions)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.AutoAwesome">
+      Suggestions
+    </MudNavLink>
     <MudNavLink Href="@(ClientRoutes.AssetManagement)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Inventory">
       Asset Management
+    </MudNavLink>
+    <MudNavLink Href="@(ClientRoutes.PatchManagement)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.SystemUpdateAlt">
+      Patch Management
     </MudNavLink>
     <MudNavLink Href="@(ClientRoutes.AuditLog)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.History">
       Audit Log
     </MudNavLink>
     <MudNavLink Href="@(ClientRoutes.Webhooks)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Webhook">
       Webhooks
+    </MudNavLink>
+    <MudNavLink Href="@(ClientRoutes.SupportSessions)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Support">
+      Support Sessions
+    </MudNavLink>
+    <MudNavLink Href="@(ClientRoutes.SessionRecordings)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.VideoLibrary">
+      Session Recordings
+    </MudNavLink>
+    <MudNavLink Href="@(ClientRoutes.Toolbox)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.BuildCircle">
+      Toolbox
+    </MudNavLink>
+    <MudNavLink Href="@(ClientRoutes.Credentials)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.VpnKey">
+      Credential Vault
+    </MudNavLink>
+    <MudNavLink Href="@(ClientRoutes.Ticketing)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.ConfirmationNumber">
+      Ticketing
+    </MudNavLink>
+    <MudNavLink Href="@(ClientRoutes.JitAdmin)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.AdminPanelSettings">
+      JIT Admin
+    </MudNavLink>
+    <MudNavLink Href="@(ClientRoutes.Plugins)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Extension">
+      Plugins
     </MudNavLink>
   </AuthorizeView>
   <AuthorizeView Roles="@(RoleNames.ServerAdministrator)">

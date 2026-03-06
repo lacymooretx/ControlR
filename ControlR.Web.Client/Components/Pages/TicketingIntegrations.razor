@@ -1,0 +1,252 @@
+@page "/ticketing"
+@attribute [Authorize(Roles = RoleNames.TenantAdministrator)]
+@inject IControlrApi ControlrApi
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudText Typo="Typo.h4" Color="Color.Primary" GutterBottom>
+  Ticketing Integrations
+</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+  <MudStack Row AlignItems="AlignItems.Center">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+      StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+      New Integration
+    </MudButton>
+    <MudSpacer />
+    <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Info"
+      OnClick="RefreshIntegrations" />
+  </MudStack>
+</MudPaper>
+
+@if (_loading)
+{
+  <MudProgressLinear Indeterminate Color="Color.Primary" />
+}
+else if (_integrations.Count == 0)
+{
+  <MudAlert Severity="Severity.Info">
+    No ticketing integrations configured. Create an integration to connect external ticketing systems.
+  </MudAlert>
+}
+else
+{
+  <MudDataGrid T="TicketingIntegrationDto" Items="_integrations" SortMode="SortMode.Single"
+    Filterable="false" Hideable="false">
+    <Columns>
+      <PropertyColumn Property="x => x.Name" Title="Name" />
+      <TemplateColumn T="TicketingIntegrationDto" Title="Provider" Sortable="false">
+        <CellTemplate>
+          @context.Item.Provider.ToString()
+        </CellTemplate>
+      </TemplateColumn>
+      <PropertyColumn Property="x => x.BaseUrl" Title="Base URL" />
+      <PropertyColumn Property="x => x.DefaultProject" Title="Default Project" />
+      <TemplateColumn T="TicketingIntegrationDto" Title="Status" Sortable="false">
+        <CellTemplate>
+          @if (context.Item.IsEnabled)
+          {
+            <MudChip T="string" Color="Color.Success" Size="Size.Small">Enabled</MudChip>
+          }
+          else
+          {
+            <MudChip T="string" Color="Color.Default" Size="Size.Small">Disabled</MudChip>
+          }
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="TicketingIntegrationDto" Title="Actions" Sortable="false">
+        <CellTemplate>
+          @{
+            var integration = context.Item;
+          }
+          <MudStack Row>
+            <MudIconButton Icon="@Icons.Material.Filled.ConfirmationNumber" Color="Color.Info"
+              Size="Size.Small" title="Create Ticket" OnClick="@(() => OpenCreateTicketDialog(integration))" />
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary"
+              Size="Size.Small" OnClick="@(() => OpenEditDialog(integration))" />
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+              Size="Size.Small" OnClick="@(() => DeleteIntegration(integration))" />
+          </MudStack>
+        </CellTemplate>
+      </TemplateColumn>
+    </Columns>
+  </MudDataGrid>
+}
+
+@if (_ticketLinks.Count > 0)
+{
+  <MudPaper Class="pa-4 mt-4">
+    <MudText Typo="Typo.h6" GutterBottom>
+      Recent Tickets
+    </MudText>
+    <MudDataGrid T="TicketLinkDto" Items="_ticketLinks" SortMode="SortMode.None"
+      Filterable="false" Hideable="false" Dense>
+      <Columns>
+        <PropertyColumn Property="x => x.Subject" Title="Subject" />
+        <TemplateColumn T="TicketLinkDto" Title="Provider" Sortable="false">
+          <CellTemplate>
+            @context.Item.Provider.ToString()
+          </CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn Property="x => x.ExternalTicketId" Title="Ticket ID" />
+        <TemplateColumn T="TicketLinkDto" Title="Link" Sortable="false">
+          <CellTemplate>
+            <MudLink Href="@context.Item.ExternalTicketUrl" Target="_blank">
+              Open
+            </MudLink>
+          </CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn Property="x => x.CreatedAt" Title="Created" Format="yyyy-MM-dd HH:mm" />
+        <TemplateColumn T="TicketLinkDto" Title="" Sortable="false">
+          <CellTemplate>
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+              Size="Size.Small" OnClick="@(() => DeleteTicketLink(context.Item))" />
+          </CellTemplate>
+        </TemplateColumn>
+      </Columns>
+    </MudDataGrid>
+  </MudPaper>
+}
+
+@code {
+  private List<TicketingIntegrationDto> _integrations = [];
+  private List<TicketLinkDto> _ticketLinks = [];
+  private bool _loading = true;
+
+  protected override async Task OnInitializedAsync()
+  {
+    await RefreshIntegrations();
+    await RefreshTicketLinks();
+  }
+
+  private async Task RefreshIntegrations()
+  {
+    _loading = true;
+    StateHasChanged();
+
+    var result = await ControlrApi.GetAllTicketingIntegrations();
+    if (result.IsSuccess)
+    {
+      _integrations = result.Value.ToList();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to load integrations: {result.Reason}", Severity.Error);
+    }
+
+    _loading = false;
+  }
+
+  private async Task RefreshTicketLinks()
+  {
+    var result = await ControlrApi.GetTicketLinks();
+    if (result.IsSuccess)
+    {
+      _ticketLinks = result.Value.ToList();
+    }
+  }
+
+  private async Task OpenCreateDialog()
+  {
+    var parameters = new DialogParameters<TicketingIntegrationEditDialog>
+    {
+      { x => x.Integration, null },
+    };
+
+    var dialog = await DialogService.ShowAsync<TicketingIntegrationEditDialog>(
+      "New Ticketing Integration", parameters,
+      new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+    var dialogResult = await dialog.Result;
+
+    if (dialogResult is { Canceled: false })
+    {
+      await RefreshIntegrations();
+    }
+  }
+
+  private async Task OpenEditDialog(TicketingIntegrationDto integration)
+  {
+    var parameters = new DialogParameters<TicketingIntegrationEditDialog>
+    {
+      { x => x.Integration, integration },
+    };
+
+    var dialog = await DialogService.ShowAsync<TicketingIntegrationEditDialog>(
+      "Edit Ticketing Integration", parameters,
+      new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+    var dialogResult = await dialog.Result;
+
+    if (dialogResult is { Canceled: false })
+    {
+      await RefreshIntegrations();
+    }
+  }
+
+  private async Task OpenCreateTicketDialog(TicketingIntegrationDto integration)
+  {
+    var parameters = new DialogParameters<CreateTicketDialog>
+    {
+      { x => x.IntegrationId, integration.Id },
+      { x => x.IntegrationName, integration.Name },
+    };
+
+    var dialog = await DialogService.ShowAsync<CreateTicketDialog>(
+      "Create Ticket", parameters,
+      new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+    var dialogResult = await dialog.Result;
+
+    if (dialogResult is { Canceled: false })
+    {
+      await RefreshTicketLinks();
+    }
+  }
+
+  private async Task DeleteIntegration(TicketingIntegrationDto integration)
+  {
+    var confirmed = await DialogService.ShowMessageBox(
+      "Delete Integration",
+      $"Are you sure you want to delete '{integration.Name}'?",
+      "Delete", "Cancel");
+
+    if (confirmed != true)
+    {
+      return;
+    }
+
+    var result = await ControlrApi.DeleteTicketingIntegration(integration.Id);
+    if (result.IsSuccess)
+    {
+      Snackbar.Add("Integration deleted.", Severity.Success);
+      await RefreshIntegrations();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to delete integration: {result.Reason}", Severity.Error);
+    }
+  }
+
+  private async Task DeleteTicketLink(TicketLinkDto link)
+  {
+    var confirmed = await DialogService.ShowMessageBox(
+      "Delete Ticket Link",
+      $"Are you sure you want to remove the link to ticket '{link.ExternalTicketId}'?",
+      "Delete", "Cancel");
+
+    if (confirmed != true)
+    {
+      return;
+    }
+
+    var result = await ControlrApi.DeleteTicketLink(link.Id);
+    if (result.IsSuccess)
+    {
+      Snackbar.Add("Ticket link removed.", Severity.Success);
+      await RefreshTicketLinks();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to delete ticket link: {result.Reason}", Severity.Error);
+    }
+  }
+}

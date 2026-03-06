@@ -1,6 +1,7 @@
 @inject ISnackbar Snackbar
 @inject IDeviceStore DeviceStore
 @inject IHubConnection<IViewerHub> ViewerHub
+@inject IActionVerificationGuard VerificationGuard
 @inject NavigationManager NavMan
 
 <MudDialog>
@@ -90,6 +91,11 @@
 
   private async Task ExecuteScript()
   {
+    if (!await VerificationGuard.EnsureVerified())
+    {
+      return;
+    }
+
     _executing = true;
 
     var request = new ExecuteScriptRequestDto(

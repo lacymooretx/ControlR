@@ -1,0 +1,143 @@
+@page "/support"
+@rendermode InteractiveWebAssembly
+@attribute [AllowAnonymous]
+@inject ILazyInjector<IControlrApi> ControlrApi
+@inject ISnackbar Snackbar
+@inject NavigationManager NavMan
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
+  @if (!_joined)
+  {
+    <MudPaper Class="pa-6" Elevation="3">
+      <MudStack Spacing="4" AlignItems="AlignItems.Center">
+        <MudIcon Icon="@Icons.Material.Filled.Support" Color="Color.Primary" Size="Size.Large" />
+        <MudText Typo="Typo.h4" Align="Align.Center" Color="Color.Primary">
+          ControlR Support
+        </MudText>
+        <MudText Typo="Typo.body1" Align="Align.Center" Color="Color.Secondary">
+          Enter the support code provided by your technician
+        </MudText>
+
+        <MudTextField @bind-Value="_accessCode" Label="Access Code" Variant="Variant.Outlined"
+          Placeholder="12345678" Style="font-family: monospace; font-size: 1.5em; letter-spacing: 4px; text-align: center;"
+          MaxLength="8" FullWidth Immediate
+          Mask="@(new PatternMask("00000000") { MaskChars = [new MaskChar('0', @"[0-9]")] })"
+          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Pin"
+          Error="@(!string.IsNullOrEmpty(_errorMessage))" ErrorText="@_errorMessage" />
+
+        <MudTextField @bind-Value="_clientName" Label="Your Name (optional)" Variant="Variant.Outlined"
+          FullWidth Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Person" />
+
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth Size="Size.Large"
+          OnClick="JoinSession" Disabled="@(_joining || string.IsNullOrWhiteSpace(_accessCode))">
+          @if (_joining)
+          {
+            <MudProgressCircular Indeterminate Size="Size.Small" Class="mr-2" />
+            <MudText>Connecting...</MudText>
+          }
+          else
+          {
+            <MudText>Connect</MudText>
+          }
+        </MudButton>
+      </MudStack>
+    </MudPaper>
+  }
+  else
+  {
+    <MudPaper Class="pa-6" Elevation="3">
+      <MudStack Spacing="4" AlignItems="AlignItems.Center">
+        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Large" />
+        <MudText Typo="Typo.h5" Align="Align.Center" Color="Color.Success">
+          Connected!
+        </MudText>
+
+        @if (!string.IsNullOrEmpty(_technicianName))
+        {
+          <MudText Typo="Typo.body1" Align="Align.Center">
+            Your technician <strong>@_technicianName</strong> will be with you shortly.
+          </MudText>
+        }
+        else
+        {
+          <MudText Typo="Typo.body1" Align="Align.Center">
+            A technician will be with you shortly.
+          </MudText>
+        }
+
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-2">
+          <MudText Typo="Typo.body2">
+            Please keep this page open. Your technician may connect to your device to provide support.
+            Follow any instructions they provide.
+          </MudText>
+        </MudAlert>
+
+        <MudText Typo="Typo.caption" Color="Color.Secondary">
+          Session ID: @_sessionId
+        </MudText>
+      </MudStack>
+    </MudPaper>
+  }
+</MudContainer>
+
+@code {
+  private string _accessCode = "";
+  private string _clientName = "";
+  private string? _errorMessage;
+  private bool _joined;
+  private bool _joining;
+  private Guid _sessionId;
+  private string? _technicianName;
+
+  [SupplyParameterFromQuery(Name = "code")]
+  public string? CodeFromQuery { get; set; }
+
+  protected override void OnInitialized()
+  {
+    if (!string.IsNullOrWhiteSpace(CodeFromQuery))
+    {
+      _accessCode = CodeFromQuery;
+    }
+  }
+
+  private async Task JoinSession()
+  {
+    _errorMessage = null;
+
+    if (string.IsNullOrWhiteSpace(_accessCode))
+    {
+      _errorMessage = "Please enter an access code.";
+      return;
+    }
+
+    var code = _accessCode.Trim();
+    if (code.Length != 8 || !code.All(char.IsDigit))
+    {
+      _errorMessage = "Access code must be 8 digits.";
+      return;
+    }
+
+    _joining = true;
+    StateHasChanged();
+
+    var request = new SupportSessionJoinRequestDto(
+      code,
+      string.IsNullOrWhiteSpace(_clientName) ? null : _clientName.Trim());
+
+    var result = await ControlrApi.Value.JoinSupportSession(request);
+
+    if (result.IsSuccess)
+    {
+      _sessionId = result.Value.SessionId;
+      _technicianName = result.Value.TechnicianName;
+      _joined = true;
+    }
+    else
+    {
+      _errorMessage = result.Reason ?? "Invalid or expired access code. Please check the code and try again.";
+      Snackbar.Add($"Failed to join session: {result.Reason}", Severity.Error);
+    }
+
+    _joining = false;
+  }
+}

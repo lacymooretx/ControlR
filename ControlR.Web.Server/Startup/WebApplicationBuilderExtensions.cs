@@ -17,6 +17,7 @@ using MudBlazor.Services;
 using ControlR.Web.Server.Components.Account;
 using ControlR.Libraries.WebSocketRelay.Common.Extensions;
 using ControlR.Web.Server.Services;
+using ControlR.Web.Server.Services.Ticketing;
 using ControlR.Web.Server.Services.Users;
 using ControlR.Web.Server.Services.LogonTokens;
 using ControlR.Web.Client.Services;
@@ -304,6 +305,7 @@ public static class WebApplicationBuilderExtensions
     // Add other services.
 
     builder.Services.AddSingleton<IEmailSender<AppUser>, IdentityEmailSender>();
+    builder.Services.AddSingleton<IActionVerificationService, ActionVerificationService>();
 
     builder.Services.AddOutputCache();
     builder.Services.AddMemoryCache();
@@ -334,15 +336,25 @@ public static class WebApplicationBuilderExtensions
     builder.Services.AddSingleton<IMetricsIngestionService>(sp => sp.GetRequiredService<MetricsIngestionService>());
     builder.Services.AddHostedService<MetricsIngestionBackgroundService>();
     builder.Services.AddHostedService<AlertEvaluationService>();
+    builder.Services.AddSingleton<ISuggestionEngine, SuggestionEngineService>();
+    builder.Services.AddHostedService<SuggestionEngineBackgroundService>();
+    builder.Services.AddHostedService<SupportSessionCleanupService>();
+    builder.Services.AddHostedService<JitAdminCleanupService>();
+    builder.Services.AddHostedService<RecordingCleanupService>();
     builder.Services.AddSingleton<ISchedulerService, SchedulerService>();
     builder.Services.AddHostedService<SchedulerBackgroundService>();
     builder.Services.AddSingleton<WebhookDispatcher>();
     builder.Services.AddSingleton<IWebhookDispatcher>(sp => sp.GetRequiredService<WebhookDispatcher>());
     builder.Services.AddHostedService<WebhookDispatcherBackgroundService>();
     builder.Services.AddHttpClient("Webhook");
+    builder.Services.AddSingleton<IPluginLoaderService, PluginLoaderService>();
+    builder.Services.AddSingleton<ICredentialEncryptionService, CredentialEncryptionService>();
+    builder.Services.AddHttpClient("Ticketing");
+    builder.Services.AddScoped<ITicketingProvider, WebhookTicketingProvider>();
     builder.Services.AddScoped<IDeviceManager, DeviceManager>();
     builder.Services.AddScoped<IUserSettingsProvider, UserSettingsProviderServer>();
     builder.Services.AddScoped<IPublicRegistrationSettingsProvider, PublicRegistrationSettingsProviderServer>();
+    builder.Services.AddScoped<IBrandingState, BrandingStateServer>();
     builder.Services.AddScoped<ITenantInvitesProvider, TenantInvitesProvider>();
 
     return builder;

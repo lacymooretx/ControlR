@@ -158,6 +158,93 @@ internal class AgentHubClient(
     }
   }
 
+  public async Task<Result> CreateJitAdminAccount(CreateJitAdminRequestHubDto request)
+  {
+    try
+    {
+      _logger.LogInformation("JIT Admin account creation requested. Username: {Username}, TTL: {TtlMinutes}min",
+        request.Username, request.TtlMinutes);
+
+      if (!OperatingSystem.IsWindows())
+      {
+        _logger.LogWarning("JIT Admin accounts are only supported on Windows.");
+        return Result.Fail("JIT Admin accounts are only supported on Windows.");
+      }
+
+      // Create the local user account
+      var createResult = await _processManager.GetProcessOutput(
+        "net.exe",
+        $"user {request.Username} {request.Password} /add /active:yes",
+        timeoutMs: 15_000);
+
+      if (!createResult.IsSuccess)
+      {
+        _logger.LogError("Failed to create JIT admin user: {Error}", createResult.Reason);
+        return Result.Fail($"Failed to create local user: {createResult.Reason}");
+      }
+
+      // Add to Administrators group
+      var addGroupResult = await _processManager.GetProcessOutput(
+        "net.exe",
+        $"localgroup Administrators {request.Username} /add",
+        timeoutMs: 15_000);
+
+      if (!addGroupResult.IsSuccess)
+      {
+        _logger.LogError("Failed to add JIT admin user to Administrators: {Error}", addGroupResult.Reason);
+
+        // Try to clean up the created user
+        await _processManager.GetProcessOutput(
+          "net.exe",
+          $"user {request.Username} /delete",
+          timeoutMs: 10_000);
+
+        return Result.Fail($"Failed to add user to Administrators group: {addGroupResult.Reason}");
+      }
+
+      _logger.LogInformation("JIT Admin account created successfully. Username: {Username}", request.Username);
+      return Result.Ok();
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while creating JIT admin account.");
+      return Result.Fail("An error occurred while creating JIT admin account.");
+    }
+  }
+
+  public async Task<Result> DeleteJitAdminAccount(DeleteJitAdminRequestHubDto request)
+  {
+    try
+    {
+      _logger.LogInformation("JIT Admin account deletion requested. Username: {Username}", request.Username);
+
+      if (!OperatingSystem.IsWindows())
+      {
+        _logger.LogWarning("JIT Admin accounts are only supported on Windows.");
+        return Result.Fail("JIT Admin accounts are only supported on Windows.");
+      }
+
+      var deleteResult = await _processManager.GetProcessOutput(
+        "net.exe",
+        $"user {request.Username} /delete",
+        timeoutMs: 15_000);
+
+      if (!deleteResult.IsSuccess)
+      {
+        _logger.LogError("Failed to delete JIT admin user: {Error}", deleteResult.Reason);
+        return Result.Fail($"Failed to delete local user: {deleteResult.Reason}");
+      }
+
+      _logger.LogInformation("JIT Admin account deleted successfully. Username: {Username}", request.Username);
+      return Result.Ok();
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while deleting JIT admin account.");
+      return Result.Fail("An error occurred while deleting JIT admin account.");
+    }
+  }
+
   public async Task<Result> CreateDirectory(CreateDirectoryHubDto dto)
   {
     try
@@ -332,6 +419,33 @@ internal class AgentHubClient(
     {
       _logger.LogError(ex, "Error while deleting file system entry: {FilePath}", dto.TargetPath);
       return Result.Fail("An error occurred while deleting file system entry.");
+    }
+  }
+
+  public async Task<Result> MoveFile(MoveFileHubDto dto)
+  {
+    try
+    {
+      _logger.LogInformation("Move file system entry: {Source} -> {Destination}", dto.SourcePath, dto.DestinationPath);
+
+      var result = await _fileManager.MoveFileSystemEntry(dto.SourcePath, dto.DestinationPath);
+
+      if (result.IsSuccess)
+      {
+        _logger.LogInformation("Successfully moved file system entry: {Source} -> {Destination}",
+          dto.SourcePath, dto.DestinationPath);
+        return Result.Ok();
+      }
+
+      _logger.LogWarning("Failed to move file system entry: {Source} -> {Destination}, Error: {Error}",
+        dto.SourcePath, dto.DestinationPath, result.ErrorMessage);
+      return Result.Fail(result.ErrorMessage ?? "Failed to move file system entry");
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while moving file system entry: {Source} -> {Destination}",
+        dto.SourcePath, dto.DestinationPath);
+      return Result.Fail("An error occurred while moving file system entry.");
     }
   }
 
@@ -575,6 +689,47 @@ internal class AgentHubClient(
     await _powerControl.ChangeState(changeType);
   }
 
+  public async Task<Result> RebootToSafeMode(SafeModeRebootRequestHubDto request)
+  {
+    try
+    {
+      _logger.LogInformation(
+        "Safe Mode reboot requested. WithNetworking: {WithNetworking}",
+        request.WithNetworking);
+
+      if (!OperatingSystem.IsWindows())
+      {
+        _logger.LogWarning("Safe Mode reboot is only supported on Windows.");
+        return Result.Fail("Safe Mode reboot is only supported on Windows.");
+      }
+
+      var safebootValue = request.WithNetworking ? "network" : "minimal";
+
+      var bcdeditResult = await _processManager.GetProcessOutput(
+        "bcdedit.exe",
+        $"/set {{current}} safeboot {safebootValue}",
+        timeoutMs: 10_000);
+
+      if (!bcdeditResult.IsSuccess)
+      {
+        _logger.LogError("Failed to configure Safe Mode boot: {Error}", bcdeditResult.Reason);
+        return Result.Fail($"Failed to configure Safe Mode boot: {bcdeditResult.Reason}");
+      }
+
+      _logger.LogInformation(
+        "Safe Mode boot configured successfully. Initiating reboot in 5 seconds.");
+
+      _ = _processManager.Start("shutdown.exe", "/r /t 5 /f", true);
+
+      return Result.Ok();
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while rebooting to Safe Mode.");
+      return Result.Fail("An error occurred while rebooting to Safe Mode.");
+    }
+  }
+
   public async Task<Result> ReceivePtyInput(PtyInputDto dto)
   {
     try
@@ -805,6 +960,201 @@ internal class AgentHubClient(
     {
       _logger.LogError(ex, "Error streaming subdirectories for {DirectoryPath}", dto.DirectoryPath);
       return Result.Fail("An error occurred while streaming subdirectories.");
+    }
+  }
+
+  public async Task<Result> ScanForPatches(PatchScanRequestHubDto request)
+  {
+    try
+    {
+      _logger.LogInformation("Patch scan requested by server.");
+
+      if (!OperatingSystem.IsWindows())
+      {
+        _logger.LogWarning("Patch scanning is only supported on Windows.");
+        return Result.Fail("Patch scanning is only supported on Windows.");
+      }
+
+      var deviceInfo = await _deviceDataGenerator.CreateDevice();
+
+      _ = Task.Run(async () =>
+      {
+        try
+        {
+          var script = @"
+$Session = New-Object -ComObject Microsoft.Update.Session
+$Searcher = $Session.CreateUpdateSearcher()
+$Results = $Searcher.Search('IsInstalled=0')
+foreach ($Update in $Results.Updates) {
+  $Size = 0
+  if ($Update.MaxDownloadSize -gt 0) { $Size = $Update.MaxDownloadSize }
+  $Important = $Update.MsrcSeverity -eq 'Important' -or $Update.AutoSelectOnWebSites
+  $Critical = $Update.MsrcSeverity -eq 'Critical'
+  [PSCustomObject]@{
+    UpdateId = $Update.Identity.UpdateID
+    Title = $Update.Title
+    Description = $Update.Description
+    IsImportant = $Important
+    IsCritical = $Critical
+    SizeBytes = $Size
+  }
+} | ConvertTo-Json -Compress
+";
+          var psResult = await _processManager.GetProcessOutput(
+            "powershell.exe",
+            $"-NoProfile -NonInteractive -Command \"{script.Replace("\"", "\\\"").Replace("\n", " ")}\"",
+            timeoutMs: 120_000);
+
+          var patches = Array.Empty<PatchInfoHubDto>();
+          var jsonOptions = new System.Text.Json.JsonSerializerOptions
+          {
+            PropertyNameCaseInsensitive = true
+          };
+
+          if (psResult.IsSuccess && !string.IsNullOrWhiteSpace(psResult.Value))
+          {
+            try
+            {
+              var output = psResult.Value.Trim();
+              if (output.StartsWith('['))
+              {
+                patches = System.Text.Json.JsonSerializer.Deserialize<PatchInfoHubDto[]>(output, jsonOptions) ?? [];
+              }
+              else if (output.StartsWith('{'))
+              {
+                var single = System.Text.Json.JsonSerializer.Deserialize<PatchInfoHubDto>(output, jsonOptions);
+                patches = single is not null ? [single] : [];
+              }
+            }
+            catch (Exception ex)
+            {
+              _logger.LogWarning(ex, "Failed to parse patch scan JSON output.");
+            }
+          }
+
+          var result = new PatchScanResultHubDto(deviceInfo.Id, patches);
+          await _hubConnection.Server.ReportPatchScanResult(result);
+          _logger.LogInformation("Patch scan completed. Found {Count} available patches.", patches.Length);
+        }
+        catch (Exception ex)
+        {
+          _logger.LogError(ex, "Error during patch scan execution.");
+          var emptyResult = new PatchScanResultHubDto(deviceInfo.Id, []);
+          await _hubConnection.Server.ReportPatchScanResult(emptyResult);
+        }
+      });
+
+      return Result.Ok();
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while initiating patch scan.");
+      return Result.Fail("An error occurred while initiating patch scan.");
+    }
+  }
+
+  public async Task<Result> InstallPatches(PatchInstallRequestHubDto request)
+  {
+    try
+    {
+      _logger.LogInformation("Patch install requested. UpdateIds: {Count}", request.UpdateIds.Length);
+
+      if (!OperatingSystem.IsWindows())
+      {
+        _logger.LogWarning("Patch installation is only supported on Windows.");
+        return Result.Fail("Patch installation is only supported on Windows.");
+      }
+
+      var deviceInfo = await _deviceDataGenerator.CreateDevice();
+
+      _ = Task.Run(async () =>
+      {
+        try
+        {
+          var updateIdList = string.Join("','", request.UpdateIds);
+          var script = $@"
+$TargetIds = @('{updateIdList}')
+$Session = New-Object -ComObject Microsoft.Update.Session
+$Searcher = $Session.CreateUpdateSearcher()
+$Results = $Searcher.Search('IsInstalled=0')
+$ToInstall = New-Object -ComObject Microsoft.Update.UpdateColl
+foreach ($Update in $Results.Updates) {{
+  if ($TargetIds -contains $Update.Identity.UpdateID) {{
+    $ToInstall.Add($Update) | Out-Null
+  }}
+}}
+if ($ToInstall.Count -eq 0) {{
+  Write-Output 'NO_UPDATES_FOUND'
+  exit 0
+}}
+$Downloader = $Session.CreateUpdateDownloader()
+$Downloader.Updates = $ToInstall
+$Downloader.Download() | Out-Null
+$Installer = $Session.CreateUpdateInstaller()
+$Installer.Updates = $ToInstall
+$InstallResult = $Installer.Install()
+$Installed = 0
+$Failed = 0
+for ($i = 0; $i -lt $ToInstall.Count; $i++) {{
+  if ($InstallResult.GetUpdateResult($i).ResultCode -eq 2) {{ $Installed++ }} else {{ $Failed++ }}
+}}
+Write-Output ""INSTALLED:$Installed,FAILED:$Failed""
+";
+          var psResult = await _processManager.GetProcessOutput(
+            "powershell.exe",
+            $"-NoProfile -NonInteractive -Command \"{script.Replace("\"", "\\\"").Replace("\n", " ")}\"",
+            timeoutMs: 600_000);
+
+          var installedCount = 0;
+          var failedCount = 0;
+          var isSuccess = false;
+          string? errorMessage = null;
+
+          if (psResult.IsSuccess && psResult.Value is not null)
+          {
+            var output = psResult.Value.Trim();
+            if (output.StartsWith("INSTALLED:"))
+            {
+              var parts = output.Replace("INSTALLED:", "").Split(",FAILED:");
+              if (parts.Length == 2)
+              {
+                int.TryParse(parts[0], out installedCount);
+                int.TryParse(parts[1], out failedCount);
+                isSuccess = failedCount == 0;
+              }
+            }
+            else if (output == "NO_UPDATES_FOUND")
+            {
+              errorMessage = "No matching updates found on the device.";
+            }
+          }
+          else
+          {
+            errorMessage = psResult.Reason ?? "Patch installation command failed.";
+          }
+
+          var installResult = new PatchInstallResultHubDto(
+            deviceInfo.Id, isSuccess, errorMessage, installedCount, failedCount);
+          await _hubConnection.Server.ReportPatchInstallResult(installResult);
+          _logger.LogInformation(
+            "Patch install completed. Installed: {Installed}, Failed: {Failed}",
+            installedCount, failedCount);
+        }
+        catch (Exception ex)
+        {
+          _logger.LogError(ex, "Error during patch installation.");
+          var failResult = new PatchInstallResultHubDto(
+            deviceInfo.Id, false, ex.Message, 0, request.UpdateIds.Length);
+          await _hubConnection.Server.ReportPatchInstallResult(failResult);
+        }
+      });
+
+      return Result.Ok();
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while initiating patch installation.");
+      return Result.Fail("An error occurred while initiating patch installation.");
     }
   }
 

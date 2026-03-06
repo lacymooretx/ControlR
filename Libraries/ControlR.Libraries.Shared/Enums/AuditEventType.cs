@@ -5,9 +5,11 @@ public static class AuditEventTypes
   public const string AgentUpdate = "AgentUpdate";
   public const string Chat = "Chat";
   public const string FileTransfer = "FileTransfer";
+  public const string JitAdmin = "JitAdmin";
   public const string Login = "Login";
   public const string LoginFailed = "LoginFailed";
   public const string Logout = "Logout";
+  public const string PatchManagement = "PatchManagement";
   public const string PowerState = "PowerState";
   public const string RemoteControl = "RemoteControl";
   public const string ScriptExecution = "ScriptExecution";
@@ -19,10 +21,13 @@ public static class AuditEventTypes
 public static class AuditActions
 {
   public const string Completed = "Completed";
+  public const string Create = "Create";
+  public const string Delete = "Delete";
   public const string Download = "Download";
   public const string End = "End";
   public const string Execute = "Execute";
   public const string Failed = "Failed";
+  public const string Install = "Install";
   public const string Invoke = "Invoke";
   public const string Restart = "Restart";
   public const string Send = "Send";
@@ -31,4 +36,6 @@ public static class AuditActions
   public const string Success = "Success";
   public const string Trigger = "Trigger";
   public const string Upload = "Upload";
+  public const string SafeModeReboot = "SafeModeReboot";
+  public const string Scan = "Scan";
 }

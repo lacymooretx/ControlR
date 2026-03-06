@@ -1,0 +1,119 @@
+@inject IControlrApi ControlrApi
+@inject ISnackbar Snackbar
+
+<MudDialog>
+  <TitleContent>
+    <MudText Typo="Typo.h5" Color="Color.Warning">
+      Verify Your Identity
+    </MudText>
+  </TitleContent>
+  <DialogContent>
+    <MudText Typo="Typo.body1" Class="mb-4">
+      This action requires identity verification. Please enter your password to continue.
+    </MudText>
+    <MudForm @ref="_form" @bind-IsValid="_formIsValid">
+      <MudTextField T="string"
+                    @bind-Value="_password"
+                    @ref="_passwordRef"
+                    Label="Password"
+                    InputType="InputType.Password"
+                    OnKeyDown="HandleKeyDown"
+                    Required
+                    RequiredError="Password is required"
+                    Disabled="_verifying" />
+    </MudForm>
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+      <MudAlert Severity="Severity.Error" Class="mt-3" Dense>
+        @_errorMessage
+      </MudAlert>
+    }
+  </DialogContent>
+  <DialogActions>
+    <MudButton OnClick="Cancel" Disabled="_verifying">
+      Cancel
+    </MudButton>
+    <MudButton Variant="Variant.Filled"
+               Color="Color.Warning"
+               OnClick="Submit"
+               Disabled="@(!_formIsValid || _verifying)">
+      @if (_verifying)
+      {
+        <MudProgressCircular Indeterminate Size="Size.Small" Class="mr-2" />
+      }
+      Verify
+    </MudButton>
+  </DialogActions>
+</MudDialog>
+
+@code {
+  private string? _password;
+  private string? _errorMessage;
+  private bool _formIsValid;
+  private bool _verifying;
+  private MudForm? _form;
+  private MudTextField<string>? _passwordRef;
+
+  [CascadingParameter]
+  public required IMudDialogInstance MudDialog { get; init; }
+
+  protected override async Task OnAfterRenderAsync(bool firstRender)
+  {
+    await base.OnAfterRenderAsync(firstRender);
+    if (firstRender && _passwordRef is not null)
+    {
+      await Task.Delay(100);
+      await _passwordRef.FocusAsync();
+    }
+  }
+
+  private async Task HandleKeyDown(KeyboardEventArgs args)
+  {
+    if (args.Key == "Enter" && _formIsValid)
+    {
+      await Submit();
+    }
+  }
+
+  private void Cancel()
+  {
+    MudDialog.Cancel();
+  }
+
+  private async Task Submit()
+  {
+    if (!_formIsValid || string.IsNullOrWhiteSpace(_password))
+    {
+      return;
+    }
+
+    _verifying = true;
+    _errorMessage = null;
+    StateHasChanged();
+
+    try
+    {
+      var request = new ActionVerificationRequestDto(_password);
+      var result = await ControlrApi.VerifyAction(request);
+
+      if (result.IsSuccess && result.Value.IsVerified)
+      {
+        MudDialog.Close(DialogResult.Ok(true));
+      }
+      else
+      {
+        _errorMessage = "Invalid password. Please try again.";
+        _password = string.Empty;
+      }
+    }
+    catch (Exception)
+    {
+      _errorMessage = "Verification failed. Please try again.";
+    }
+    finally
+    {
+      _verifying = false;
+      StateHasChanged();
+    }
+  }
+}

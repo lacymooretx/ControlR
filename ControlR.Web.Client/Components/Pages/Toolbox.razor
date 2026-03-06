@@ -1,0 +1,163 @@
+@page "/toolbox"
+@rendermode InteractiveWebAssembly
+@attribute [Authorize(Roles = RoleNames.TenantAdministrator)]
+@inject ILazyInjector<IControlrApi> ControlrApi
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager NavMan
+
+<MudText Typo="Typo.h4" Color="Color.Primary" GutterBottom>
+  Toolbox
+</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+  <MudStack Row AlignItems="AlignItems.Center">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+      StartIcon="@Icons.Material.Filled.Upload" OnClick="OpenUploadDialog">
+      Upload Tool
+    </MudButton>
+    <MudSpacer />
+    <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Info"
+      OnClick="RefreshItems" />
+  </MudStack>
+</MudPaper>
+
+@if (_loading)
+{
+  <MudProgressLinear Indeterminate Color="Color.Primary" />
+}
+else if (_items.Count == 0)
+{
+  <MudAlert Severity="Severity.Info">
+    No toolbox items found. Upload tools, installers, and utilities to deploy them to remote devices.
+  </MudAlert>
+}
+else
+{
+  <MudDataGrid T="ToolboxItemDto" Items="_items" SortMode="SortMode.Single"
+    Filterable="false" Hideable="false">
+    <Columns>
+      <PropertyColumn Property="x => x.Name" Title="Name" />
+      <PropertyColumn Property="x => x.Category" Title="Category" />
+      <PropertyColumn Property="x => x.Version" Title="Version" />
+      <PropertyColumn Property="x => x.FileName" Title="File Name" />
+      <TemplateColumn T="ToolboxItemDto" Title="Size" Sortable="true" SortBy="x => x.FileSizeBytes">
+        <CellTemplate>
+          @FormatSize(context.Item.FileSizeBytes)
+        </CellTemplate>
+      </TemplateColumn>
+      <PropertyColumn Property="x => x.UploadedByUserName" Title="Uploaded By" />
+      <PropertyColumn Property="x => x.DeploymentCount" Title="Deployments" />
+      <TemplateColumn T="ToolboxItemDto" Title="Actions" Sortable="false">
+        <CellTemplate>
+          @{
+            var item = context.Item;
+          }
+          <MudStack Row>
+            <MudIconButton Icon="@Icons.Material.Filled.Download" Color="Color.Primary"
+              Size="Size.Small" title="Download"
+              OnClick="@(() => DownloadItem(item))" />
+            <MudIconButton Icon="@Icons.Material.Filled.RocketLaunch" Color="Color.Info"
+              Size="Size.Small" title="Deploy (coming soon)"
+              Disabled />
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+              Size="Size.Small" title="Delete"
+              OnClick="@(() => DeleteItem(item))" />
+          </MudStack>
+        </CellTemplate>
+      </TemplateColumn>
+    </Columns>
+  </MudDataGrid>
+}
+
+@code {
+  private bool _loading = true;
+  private List<ToolboxItemDto> _items = [];
+
+  protected override async Task OnInitializedAsync()
+  {
+    await RefreshItems();
+  }
+
+  private async Task RefreshItems()
+  {
+    _loading = true;
+    StateHasChanged();
+
+    var result = await ControlrApi.Value.GetToolboxItems();
+    if (result.IsSuccess)
+    {
+      _items = result.Value.ToList();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to load toolbox items: {result.Reason}", Severity.Error);
+    }
+
+    _loading = false;
+  }
+
+  private async Task OpenUploadDialog()
+  {
+    var options = new DialogOptions
+    {
+      MaxWidth = MaxWidth.Small,
+      FullWidth = true,
+      CloseOnEscapeKey = true
+    };
+
+    var dialog = await DialogService.ShowAsync<ToolboxUploadDialog>("Upload Tool", options);
+    var dialogResult = await dialog.Result;
+
+    if (dialogResult is not null && !dialogResult.Canceled)
+    {
+      await RefreshItems();
+    }
+  }
+
+  private void DownloadItem(ToolboxItemDto item)
+  {
+    NavMan.NavigateTo($"/api/toolbox/{item.Id}/download", forceLoad: true);
+  }
+
+  private async Task DeleteItem(ToolboxItemDto item)
+  {
+    var confirmed = await DialogService.ShowMessageBox(
+      "Delete Tool",
+      $"Are you sure you want to delete \"{item.Name}\"?",
+      "Delete", "Cancel");
+
+    if (confirmed != true)
+    {
+      return;
+    }
+
+    var result = await ControlrApi.Value.DeleteToolboxItem(item.Id);
+    if (result.IsSuccess)
+    {
+      Snackbar.Add("Tool deleted.", Severity.Success);
+      await RefreshItems();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to delete tool: {result.Reason}", Severity.Error);
+    }
+  }
+
+  private static string FormatSize(long bytes)
+  {
+    if (bytes >= 1_073_741_824)
+    {
+      return $"{bytes / 1_073_741_824.0:F1} GB";
+    }
+    if (bytes >= 1_048_576)
+    {
+      return $"{bytes / 1_048_576.0:F1} MB";
+    }
+    if (bytes >= 1024)
+    {
+      return $"{bytes / 1024.0:F1} KB";
+    }
+    return $"{bytes} B";
+  }
+}

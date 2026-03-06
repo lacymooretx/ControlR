@@ -57,6 +57,9 @@ public partial class Dashboard
   public required IUserTagStore UserTagStore { get; init; }
 
   [Inject]
+  public required IActionVerificationGuard VerificationGuard { get; init; }
+
+  [Inject]
   public required IDeviceContentWindowStore WindowStore { get; init; }
 
   private bool ShouldBypassHideOfflineDevices =>
@@ -244,6 +247,11 @@ public partial class Dashboard
   {
     try
     {
+      if (!await VerificationGuard.EnsureVerified())
+      {
+        return;
+      }
+
       var result = await DialogService.ShowMessageBox(
         "Confirm Removal",
         "Are you sure you want to remove this device?",
@@ -268,6 +276,93 @@ public partial class Dashboard
     catch (Exception ex)
     {
       Logger.LogError(ex, "Error while removing device.");
+    }
+  }
+
+  private async Task RebootToSafeMode(DeviceViewModel device)
+  {
+    try
+    {
+      if (!await VerificationGuard.EnsureVerified())
+      {
+        return;
+      }
+
+      var result = await DialogService.ShowMessageBox(
+        "Confirm Safe Mode Reboot",
+        $"Are you sure you want to reboot {device.Dto.Name} into Safe Mode with Networking? " +
+        "The device will restart into Safe Mode and the agent will reconnect automatically.",
+        "Yes",
+        "No");
+
+      if (result != true)
+      {
+        return;
+      }
+
+      var rebootResult = await MainHub.Server.RequestSafeModeReboot(device.Id, withNetworking: true);
+      if (rebootResult.IsSuccess)
+      {
+        Snackbar.Add("Safe Mode reboot command sent", Severity.Success);
+      }
+      else
+      {
+        Snackbar.Add($"Safe Mode reboot failed: {rebootResult.Reason}", Severity.Error);
+      }
+    }
+    catch (Exception ex)
+    {
+      Logger.LogError(ex, "Error while rebooting device to Safe Mode.");
+      Snackbar.Add("An error occurred while sending Safe Mode reboot command", Severity.Error);
+    }
+  }
+
+  private async Task CreateJitAdmin(DeviceViewModel device)
+  {
+    try
+    {
+      if (!await VerificationGuard.EnsureVerified())
+      {
+        return;
+      }
+
+      var confirm = await DialogService.ShowMessageBox(
+        "Create JIT Admin Account",
+        $"Create a temporary local admin account on {device.Dto.Name}? The account will auto-expire after 60 minutes.",
+        "Create",
+        "Cancel");
+
+      if (confirm != true)
+      {
+        return;
+      }
+
+      Snackbar.Add("Creating JIT admin account...", Severity.Info);
+
+      var result = await MainHub.Server.RequestCreateJitAdmin(device.Id, ttlMinutes: 60);
+      if (result.IsSuccess)
+      {
+        var response = result.Value;
+        await DialogService.ShowMessageBox(
+          "JIT Admin Account Created",
+          (MarkupString)$"<div style='font-family: monospace;'>" +
+            $"<p><strong>Device:</strong> {device.Dto.Name}</p>" +
+            $"<p><strong>Username:</strong> {response.Account.Username}</p>" +
+            $"<p><strong>Password:</strong> {response.Password}</p>" +
+            $"<p><strong>Expires:</strong> {response.Account.ExpiresAt:g} UTC</p>" +
+            $"<p style='color: #ff9800; margin-top: 8px;'>Copy these credentials now. The password will not be shown again.</p>" +
+            $"</div>",
+          "OK");
+      }
+      else
+      {
+        Snackbar.Add($"Failed to create JIT admin: {result.Reason}", Severity.Error);
+      }
+    }
+    catch (Exception ex)
+    {
+      Logger.LogError(ex, "Error while creating JIT admin account.");
+      Snackbar.Add("An error occurred while creating JIT admin account", Severity.Error);
     }
   }
 
@@ -322,6 +417,11 @@ public partial class Dashboard
   {
     try
     {
+      if (!await VerificationGuard.EnsureVerified())
+      {
+        return;
+      }
+
       var result = await DialogService.ShowMessageBox(
         "Confirm Uninstall",
         $"Are you sure you want to uninstall the agent from {device.Dto.Name}?",

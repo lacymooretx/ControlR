@@ -49,6 +49,7 @@ BitBlt
 CURSORINFO
 ReleaseDC
 EnumDisplaySettings
+ChangeDisplaySettingsEx
 OpenWindowStation
 EnumDesktops
 SetProcessWindowStation

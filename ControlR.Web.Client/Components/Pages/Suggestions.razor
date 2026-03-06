@@ -1,0 +1,160 @@
+@page "/suggestions"
+@attribute [Authorize(Roles = RoleNames.TenantAdministrator)]
+@inject IControlrApi ControlrApi
+@inject ISnackbar Snackbar
+
+<MudText Typo="Typo.h4" Color="Color.Primary" GutterBottom>
+  Automation Suggestions
+</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+  <MudStack Row AlignItems="AlignItems.Center">
+    <MudSelect T="string" Label="Status" Value="_statusFilter" ValueChanged="OnStatusFilterChanged"
+      Variant="Variant.Outlined" Class="mr-4" Style="max-width: 200px;">
+      <MudSelectItem Value="@("New")">New</MudSelectItem>
+      <MudSelectItem Value="@("Accepted")">Accepted</MudSelectItem>
+      <MudSelectItem Value="@("Dismissed")">Dismissed</MudSelectItem>
+      <MudSelectItem Value="@("Expired")">Expired</MudSelectItem>
+      <MudSelectItem Value="@("")">All</MudSelectItem>
+    </MudSelect>
+    <MudSpacer />
+    <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Info"
+      OnClick="RefreshSuggestions" />
+  </MudStack>
+</MudPaper>
+
+@if (_loading)
+{
+  <MudProgressLinear Indeterminate Color="Color.Primary" />
+}
+else if (_suggestions.Count == 0)
+{
+  <MudAlert Severity="Severity.Info">
+    No @(string.IsNullOrEmpty(_statusFilter) ? "" : _statusFilter.ToLower() + " ") suggestions found.
+  </MudAlert>
+}
+else
+{
+  <MudDataGrid T="AutomationSuggestionDto" Items="_suggestions" SortMode="SortMode.Single"
+    Filterable="false" Hideable="false">
+    <Columns>
+      <TemplateColumn T="AutomationSuggestionDto" Title="Type" Sortable="false">
+        <CellTemplate>
+          @{
+            var icon = context.Item.SuggestionType switch
+            {
+              "HighCpu" => Icons.Material.Filled.Memory,
+              "HighMemory" => Icons.Material.Filled.Memory,
+              "HighDisk" => Icons.Material.Filled.Storage,
+              "FrequentAlerts" => Icons.Material.Filled.NotificationsActive,
+              "StaleDevice" => Icons.Material.Filled.DeviceUnknown,
+              _ => Icons.Material.Filled.AutoAwesome,
+            };
+            var color = context.Item.SuggestionType switch
+            {
+              "HighCpu" => Color.Error,
+              "HighMemory" => Color.Warning,
+              "HighDisk" => Color.Error,
+              "FrequentAlerts" => Color.Warning,
+              "StaleDevice" => Color.Info,
+              _ => Color.Default,
+            };
+          }
+          <MudChip T="string" Color="@color" Size="Size.Small" Icon="@icon">
+            @context.Item.SuggestionType
+          </MudChip>
+        </CellTemplate>
+      </TemplateColumn>
+      <PropertyColumn Property="x => x.Title" Title="Title" />
+      <PropertyColumn Property="x => x.Description" Title="Description" />
+      <TemplateColumn T="AutomationSuggestionDto" Title="Confidence" Sortable="false">
+        <CellTemplate>
+          <MudProgressLinear Value="@(context.Item.Confidence * 100)" Color="Color.Info" Size="Size.Small" Rounded
+            Style="min-width: 80px;" />
+          <MudText Typo="Typo.caption">@($"{context.Item.Confidence:P0}")</MudText>
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="AutomationSuggestionDto" Title="Status" Sortable="false">
+        <CellTemplate>
+          @{
+            var statusColor = context.Item.Status switch
+            {
+              "New" => Color.Info,
+              "Accepted" => Color.Success,
+              "Dismissed" => Color.Default,
+              "Expired" => Color.Warning,
+              _ => Color.Default,
+            };
+          }
+          <MudChip T="string" Color="@statusColor" Size="Size.Small">@context.Item.Status</MudChip>
+        </CellTemplate>
+      </TemplateColumn>
+      <PropertyColumn Property="x => x.CreatedAt" Title="Created" Format="g" />
+      <TemplateColumn T="AutomationSuggestionDto" Title="Actions" Sortable="false">
+        <CellTemplate>
+          @if (context.Item.Status == "New")
+          {
+            <MudIconButton Icon="@Icons.Material.Filled.Check" Color="Color.Success" Size="Size.Small"
+              OnClick="@(() => UpdateStatus(context.Item.Id, "Accepted"))" />
+            <MudIconButton Icon="@Icons.Material.Filled.Close" Color="Color.Default" Size="Size.Small"
+              OnClick="@(() => UpdateStatus(context.Item.Id, "Dismissed"))" />
+          }
+        </CellTemplate>
+      </TemplateColumn>
+    </Columns>
+  </MudDataGrid>
+}
+
+@code {
+  private bool _loading;
+  private string _statusFilter = "New";
+  private List<AutomationSuggestionDto> _suggestions = new();
+
+  protected override async Task OnInitializedAsync()
+  {
+    await RefreshSuggestions();
+  }
+
+  private async Task OnStatusFilterChanged(string value)
+  {
+    _statusFilter = value;
+    await RefreshSuggestions();
+  }
+
+  private async Task RefreshSuggestions()
+  {
+    _loading = true;
+    StateHasChanged();
+
+    var result = await ControlrApi.GetSuggestions(
+      string.IsNullOrEmpty(_statusFilter) ? null : _statusFilter);
+
+    if (result.IsSuccess)
+    {
+      _suggestions = result.Value?.ToList() ?? [];
+    }
+    else
+    {
+      Snackbar.Add($"Failed to load suggestions: {result.Reason}", Severity.Error);
+    }
+
+    _loading = false;
+    StateHasChanged();
+  }
+
+  private async Task UpdateStatus(Guid suggestionId, string newStatus)
+  {
+    var request = new AutomationSuggestionUpdateRequestDto(newStatus);
+    var result = await ControlrApi.UpdateSuggestion(suggestionId, request);
+
+    if (result.IsSuccess)
+    {
+      Snackbar.Add($"Suggestion {newStatus.ToLower()}", Severity.Success);
+      await RefreshSuggestions();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to update suggestion: {result.Reason}", Severity.Error);
+    }
+  }
+}

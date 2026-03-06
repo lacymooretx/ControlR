@@ -1168,6 +1168,80 @@ namespace ControlR.Web.Server.Data.Migrations
                     b.ToTable("SoftwareInventoryItems");
                 });
 
+            modelBuilder.Entity("ControlR.Web.Server.Data.Entities.StoredCredential", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<int>("AccessCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CreatedByUserName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid?>("DeviceGroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Domain")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("EncryptedPassword")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("LastAccessedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceGroupId");
+
+                    b.HasIndex("DeviceId");
+
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("Name", "TenantId")
+                        .IsUnique();
+
+                    b.ToTable("StoredCredentials");
+                });
+
             modelBuilder.Entity("ControlR.Web.Server.Data.Entities.Tag", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1918,6 +1992,17 @@ namespace ControlR.Web.Server.Data.Migrations
                 });
 
             modelBuilder.Entity("ControlR.Web.Server.Data.Entities.SoftwareInventoryItem", b =>
+                {
+                    b.HasOne("ControlR.Web.Server.Data.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("ControlR.Web.Server.Data.Entities.StoredCredential", b =>
                 {
                     b.HasOne("ControlR.Web.Server.Data.Entities.Tenant", "Tenant")
                         .WithMany()

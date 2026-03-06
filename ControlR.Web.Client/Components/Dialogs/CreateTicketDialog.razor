@@ -1,0 +1,122 @@
+@inject IControlrApi ControlrApi
+@inject ISnackbar Snackbar
+
+<MudDialog>
+  <DialogContent>
+    <MudText Typo="Typo.body2" Color="Color.Tertiary" Class="mb-3">
+      Creating ticket via: @IntegrationName
+    </MudText>
+    <MudTextField @bind-Value="_subject" Label="Subject" Required Class="mb-3"
+      Placeholder="Brief summary of the issue" />
+    <MudTextField @bind-Value="_description" Label="Description" Lines="4" Class="mb-3"
+      Placeholder="Detailed description of the issue" />
+    <MudSelect T="string" @bind-Value="_priority" Label="Priority" Class="mb-3">
+      <MudSelectItem T="string" Value="@("Low")">Low</MudSelectItem>
+      <MudSelectItem T="string" Value="@("Medium")">Medium</MudSelectItem>
+      <MudSelectItem T="string" Value="@("High")">High</MudSelectItem>
+      <MudSelectItem T="string" Value="@("Critical")">Critical</MudSelectItem>
+    </MudSelect>
+    <MudTextField @bind-Value="_deviceIdText" Label="Device ID (GUID)" Class="mb-3"
+      Placeholder="Optional - link to a device" />
+    <MudTextField @bind-Value="_alertIdText" Label="Alert ID (GUID)" Class="mb-3"
+      Placeholder="Optional - link to an alert" />
+  </DialogContent>
+  <DialogActions>
+    <MudButton OnClick="Cancel">Cancel</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Submit"
+      Disabled="@(_submitting || string.IsNullOrWhiteSpace(_subject))">
+      @if (_submitting)
+      {
+        <MudProgressCircular Indeterminate Size="Size.Small" Class="mr-2" />
+      }
+      Create Ticket
+    </MudButton>
+  </DialogActions>
+</MudDialog>
+
+@code {
+  [CascadingParameter]
+  private IMudDialogInstance MudDialog { get; set; } = null!;
+
+  [Parameter]
+  public Guid IntegrationId { get; set; }
+
+  [Parameter]
+  public string IntegrationName { get; set; } = string.Empty;
+
+  [Parameter]
+  public Guid? DeviceId { get; set; }
+
+  [Parameter]
+  public Guid? AlertId { get; set; }
+
+  private string _alertIdText = string.Empty;
+  private string _description = string.Empty;
+  private string _deviceIdText = string.Empty;
+  private string _priority = "Medium";
+  private string _subject = string.Empty;
+  private bool _submitting;
+
+  protected override void OnInitialized()
+  {
+    if (DeviceId.HasValue)
+    {
+      _deviceIdText = DeviceId.Value.ToString();
+    }
+
+    if (AlertId.HasValue)
+    {
+      _alertIdText = AlertId.Value.ToString();
+    }
+  }
+
+  private void Cancel() => MudDialog.Cancel();
+
+  private async Task Submit()
+  {
+    Guid? deviceId = null;
+    if (!string.IsNullOrWhiteSpace(_deviceIdText))
+    {
+      if (!Guid.TryParse(_deviceIdText, out var parsed))
+      {
+        Snackbar.Add("Device ID must be a valid GUID.", Severity.Error);
+        return;
+      }
+      deviceId = parsed;
+    }
+
+    Guid? alertId = null;
+    if (!string.IsNullOrWhiteSpace(_alertIdText))
+    {
+      if (!Guid.TryParse(_alertIdText, out var parsed))
+      {
+        Snackbar.Add("Alert ID must be a valid GUID.", Severity.Error);
+        return;
+      }
+      alertId = parsed;
+    }
+
+    _submitting = true;
+
+    var request = new CreateTicketRequestDto(
+      IntegrationId,
+      _subject,
+      _description,
+      _priority,
+      deviceId,
+      null, // sessionId
+      alertId);
+
+    var result = await ControlrApi.CreateTicket(request);
+    if (!result.IsSuccess)
+    {
+      Snackbar.Add($"Failed to create ticket: {result.Reason}", Severity.Error);
+      _submitting = false;
+      return;
+    }
+
+    Snackbar.Add($"Ticket created: {result.Value.ExternalTicketId}", Severity.Success);
+    _submitting = false;
+    MudDialog.Close(DialogResult.Ok(true));
+  }
+}

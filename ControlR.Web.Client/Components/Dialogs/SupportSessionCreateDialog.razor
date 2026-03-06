@@ -1,0 +1,138 @@
+@inject ILazyInjector<IControlrApi> ControlrApi
+@inject ISnackbar Snackbar
+@inject NavigationManager NavMan
+@inject IJSRuntime JsRuntime
+
+<MudDialog>
+  <DialogContent>
+    @if (_createdSession is null)
+    {
+      <MudTextField @bind-Value="_clientName" Label="Client Name" Class="mt-2"
+        HelperText="Name of the person you'll be helping (optional)" />
+      <MudTextField @bind-Value="_clientEmail" Label="Client Email" Class="mt-2"
+        HelperText="Email address of the client (optional)" />
+      <MudTextField @bind-Value="_notes" Label="Notes" Class="mt-2" Lines="3"
+        HelperText="Internal notes about this session (optional)" />
+      <MudSelect T="int" @bind-Value="_expirationMinutes" Label="Expires After" Class="mt-2"
+        Variant="Variant.Outlined">
+        <MudSelectItem T="int" Value="30">30 minutes</MudSelectItem>
+        <MudSelectItem T="int" Value="60">1 hour</MudSelectItem>
+        <MudSelectItem T="int" Value="120">2 hours</MudSelectItem>
+        <MudSelectItem T="int" Value="240">4 hours</MudSelectItem>
+        <MudSelectItem T="int" Value="480">8 hours</MudSelectItem>
+      </MudSelect>
+    }
+    else
+    {
+      <MudStack Spacing="4" AlignItems="AlignItems.Center" Class="pa-4">
+        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Large" />
+        <MudText Typo="Typo.h6" Color="Color.Success">Session Created</MudText>
+
+        <MudPaper Class="pa-4" Elevation="2" Style="background-color: var(--mud-palette-background-grey);">
+          <MudStack Spacing="2" AlignItems="AlignItems.Center">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">ACCESS CODE</MudText>
+            <MudStack Row AlignItems="AlignItems.Center">
+              <MudText Typo="Typo.h3" Style="font-family: monospace; letter-spacing: 4px; font-weight: bold;">
+                @_createdSession.AccessCode
+              </MudText>
+              <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Color="Color.Primary"
+                Size="Size.Medium" title="Copy code"
+                OnClick="@(() => CopyToClipboard(_createdSession.AccessCode, "Access code"))" />
+            </MudStack>
+          </MudStack>
+        </MudPaper>
+
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+          <MudText Typo="Typo.body2" Color="Color.Secondary">Share link:</MudText>
+          <MudText Typo="Typo.body2" Style="word-break: break-all;">
+            @GetShareLink(_createdSession.AccessCode)
+          </MudText>
+          <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Color="Color.Default"
+            Size="Size.Small" title="Copy share link"
+            OnClick="@(() => CopyToClipboard(GetShareLink(_createdSession.AccessCode), "Share link"))" />
+        </MudStack>
+
+        <MudText Typo="Typo.caption" Color="Color.Secondary">
+          Expires: @_createdSession.ExpiresAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm")
+        </MudText>
+      </MudStack>
+    }
+  </DialogContent>
+  <DialogActions>
+    @if (_createdSession is null)
+    {
+      <MudButton OnClick="Cancel">Cancel</MudButton>
+      <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Create"
+        Disabled="_saving">
+        @if (_saving)
+        {
+          <MudProgressCircular Indeterminate Size="Size.Small" Class="mr-2" />
+        }
+        Create Session
+      </MudButton>
+    }
+    else
+    {
+      <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Close">
+        Done
+      </MudButton>
+    }
+  </DialogActions>
+</MudDialog>
+
+@code {
+  [CascadingParameter]
+  private IMudDialogInstance MudDialog { get; set; } = null!;
+
+  private string _clientEmail = "";
+  private string _clientName = "";
+  private SupportSessionDto? _createdSession;
+  private int _expirationMinutes = 60;
+  private string _notes = "";
+  private bool _saving;
+
+  private void Cancel() => MudDialog.Cancel();
+
+  private void Close() => MudDialog.Close(DialogResult.Ok(true));
+
+  private async Task CopyToClipboard(string text, string label)
+  {
+    try
+    {
+      await JsRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
+      Snackbar.Add($"{label} copied to clipboard.", Severity.Success);
+    }
+    catch
+    {
+      Snackbar.Add($"{label}: {text}", Severity.Info);
+    }
+  }
+
+  private async Task Create()
+  {
+    _saving = true;
+
+    var request = new SupportSessionCreateRequestDto(
+      string.IsNullOrWhiteSpace(_clientName) ? null : _clientName.Trim(),
+      string.IsNullOrWhiteSpace(_clientEmail) ? null : _clientEmail.Trim(),
+      string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim(),
+      _expirationMinutes);
+
+    var result = await ControlrApi.Value.CreateSupportSession(request);
+
+    if (result.IsSuccess)
+    {
+      _createdSession = result.Value;
+      Snackbar.Add("Support session created successfully.", Severity.Success);
+    }
+    else
+    {
+      Snackbar.Add($"Failed to create session: {result.Reason}", Severity.Error);
+    }
+
+    _saving = false;
+  }
+
+  private string GetShareLink(string accessCode) =>
+    $"{NavMan.BaseUri}support?code={accessCode}";
+}

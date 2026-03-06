@@ -1,0 +1,239 @@
+@page "/branding"
+@rendermode InteractiveWebAssembly
+@attribute [Authorize(Roles = RoleNames.TenantAdministrator)]
+@inject ILazyInjector<IControlrApi> ControlrApi
+@inject IBrandingState BrandingState
+@inject ISnackbar Snackbar
+
+<PageTitle>
+  Branding
+</PageTitle>
+
+<PrimaryTitle>
+  Branding
+</PrimaryTitle>
+
+@if (_loading)
+{
+  <MudProgressLinear Indeterminate Color="Color.Primary" />
+}
+else
+{
+  <MudGrid Class="mt-4">
+    <MudItem xs="12" md="6">
+      <MudPaper Class="pa-4">
+        <MudText Typo="Typo.h6" Color="Color.Primary" GutterBottom>
+          General Settings
+        </MudText>
+
+        <MudTextField @bind-Value="_productName" Label="Product Name"
+          Variant="Variant.Outlined" MaxLength="100" Class="mb-4"
+          HelperText="Displayed in the app bar and page titles" />
+
+        <MudColorPicker @bind-Value="_primaryColor" Label="Primary Color"
+          Variant="Variant.Outlined" Class="mb-4"
+          ColorPickerMode="ColorPickerMode.HEX"
+          HelperText="Main accent color used throughout the UI" />
+
+        <MudColorPicker @bind-Value="_secondaryColor" Label="Secondary Color"
+          Variant="Variant.Outlined" Class="mb-4"
+          ColorPickerMode="ColorPickerMode.HEX"
+          HelperText="Optional secondary accent color" />
+
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+          OnClick="SaveSettings" Disabled="_saving"
+          StartIcon="@Icons.Material.Filled.Save">
+          @if (_saving)
+          {
+            <MudProgressCircular Size="Size.Small" Indeterminate Class="mr-2" />
+          }
+          Save Settings
+        </MudButton>
+      </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="6">
+      <MudPaper Class="pa-4">
+        <MudText Typo="Typo.h6" Color="Color.Primary" GutterBottom>
+          Logo
+        </MudText>
+
+        @if (_hasLogo)
+        {
+          <div class="mb-4">
+            <MudImage Src="@($"{HttpConstants.BrandingEndpoint}/logo?v={_logoVersion}")"
+              Height="60" ObjectFit="ObjectFit.Contain" Class="mb-2" />
+            <div>
+              <MudButton Variant="Variant.Outlined" Color="Color.Error"
+                Size="Size.Small" OnClick="DeleteLogo"
+                StartIcon="@Icons.Material.Filled.Delete">
+                Remove Logo
+              </MudButton>
+            </div>
+          </div>
+        }
+
+        <MudFileUpload T="IBrowserFile" Accept=".png,.jpg,.jpeg,.gif,.svg,.webp"
+          MaximumFileCount="1" FilesChanged="UploadLogo">
+          <ActivatorContent>
+            <MudButton Variant="Variant.Filled" Color="Color.Info"
+              StartIcon="@Icons.Material.Filled.CloudUpload"
+              Disabled="_uploadingLogo">
+              @if (_uploadingLogo)
+              {
+                <MudProgressCircular Size="Size.Small" Indeterminate Class="mr-2" />
+              }
+              Upload Logo
+            </MudButton>
+          </ActivatorContent>
+        </MudFileUpload>
+
+        <MudText Typo="Typo.caption" Class="mt-2">
+          Max 5MB. Recommended: PNG or SVG, 200x60 pixels.
+        </MudText>
+      </MudPaper>
+
+      <MudPaper Class="pa-4 mt-4">
+        <MudText Typo="Typo.h6" Color="Color.Primary" GutterBottom>
+          Preview
+        </MudText>
+
+        <MudPaper Class="pa-3" Style="@($"background-color: #1E1E1E; border-radius: 4px;")">
+          <MudStack Row AlignItems="AlignItems.Center">
+            @if (_hasLogo)
+            {
+              <MudImage Src="@($"{HttpConstants.BrandingEndpoint}/logo?v={_logoVersion}")"
+                Height="30" ObjectFit="ObjectFit.Contain" />
+            }
+            else
+            {
+              <MudIcon Icon="@Icons.Material.Filled.DesktopWindows"
+                Style="@($"color: {_primaryColor?.Value ?? "#2196F3"}")" />
+            }
+            <MudText Typo="Typo.h6" Style="@($"color: {_primaryColor?.Value ?? "#2196F3"}")">
+              @(_productName ?? "ControlR")
+            </MudText>
+          </MudStack>
+        </MudPaper>
+      </MudPaper>
+    </MudItem>
+  </MudGrid>
+}
+
+@code {
+  private bool _loading = true;
+  private bool _saving;
+  private bool _uploadingLogo;
+  private bool _hasLogo;
+  private int _logoVersion;
+  private string? _productName;
+  private MudColor? _primaryColor;
+  private MudColor? _secondaryColor;
+
+  protected override async Task OnInitializedAsync()
+  {
+    await LoadBranding();
+  }
+
+  private async Task LoadBranding()
+  {
+    _loading = true;
+
+    var result = await ControlrApi.Value.GetBranding();
+    if (result.IsSuccess)
+    {
+      _productName = result.Value.ProductName;
+      _primaryColor = new MudColor(result.Value.PrimaryColor);
+      _secondaryColor = !string.IsNullOrEmpty(result.Value.SecondaryColor)
+        ? new MudColor(result.Value.SecondaryColor)
+        : null;
+      _hasLogo = result.Value.HasLogo;
+    }
+    else
+    {
+      Snackbar.Add($"Failed to load branding: {result.Reason}", Severity.Error);
+    }
+
+    _loading = false;
+  }
+
+  private async Task SaveSettings()
+  {
+    if (string.IsNullOrWhiteSpace(_productName))
+    {
+      Snackbar.Add("Product name is required.", Severity.Warning);
+      return;
+    }
+
+    _saving = true;
+    StateHasChanged();
+
+    var request = new UpdateBrandingRequestDto(
+      _productName,
+      _primaryColor?.Value ?? "#2196F3",
+      _secondaryColor?.Value);
+
+    var result = await ControlrApi.Value.UpdateBranding(request);
+    if (result.IsSuccess)
+    {
+      await BrandingState.RefreshAsync();
+      Snackbar.Add("Branding settings saved.", Severity.Success);
+    }
+    else
+    {
+      Snackbar.Add($"Failed to save: {result.Reason}", Severity.Error);
+    }
+
+    _saving = false;
+  }
+
+  private async Task UploadLogo(IBrowserFile file)
+  {
+    if (file.Size > 5 * 1024 * 1024)
+    {
+      Snackbar.Add("File size exceeds 5MB limit.", Severity.Warning);
+      return;
+    }
+
+    _uploadingLogo = true;
+    StateHasChanged();
+
+    try
+    {
+      using var stream = file.OpenReadStream(5 * 1024 * 1024);
+      var result = await ControlrApi.Value.UploadBrandingLogo(stream, file.Name);
+      if (result.IsSuccess)
+      {
+        _hasLogo = true;
+        _logoVersion++;
+        await BrandingState.RefreshAsync();
+        Snackbar.Add("Logo uploaded.", Severity.Success);
+      }
+      else
+      {
+        Snackbar.Add($"Failed to upload logo: {result.Reason}", Severity.Error);
+      }
+    }
+    catch (Exception ex)
+    {
+      Snackbar.Add($"Upload error: {ex.Message}", Severity.Error);
+    }
+
+    _uploadingLogo = false;
+  }
+
+  private async Task DeleteLogo()
+  {
+    var result = await ControlrApi.Value.DeleteBrandingLogo();
+    if (result.IsSuccess)
+    {
+      _hasLogo = false;
+      await BrandingState.RefreshAsync();
+      Snackbar.Add("Logo removed.", Severity.Success);
+    }
+    else
+    {
+      Snackbar.Add($"Failed to remove logo: {result.Reason}", Severity.Error);
+    }
+  }
+}

@@ -1,0 +1,174 @@
+@page "/jit-admin"
+@rendermode InteractiveWebAssembly
+@attribute [Authorize(Roles = RoleNames.TenantAdministrator)]
+@inject ILazyInjector<IControlrApi> ControlrApi
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject IHubConnection<IViewerHub> MainHub
+
+<MudText Typo="Typo.h4" Color="Color.Primary" GutterBottom>
+  JIT Admin Accounts
+</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+  <MudStack Row AlignItems="AlignItems.Center">
+    <MudText Typo="Typo.body1">
+      Temporary local administrator accounts created on remote Windows devices. Passwords are shown once at creation time and are not stored.
+    </MudText>
+    <MudSpacer />
+    <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Info"
+      OnClick="RefreshAccounts" />
+  </MudStack>
+</MudPaper>
+
+@if (_loading)
+{
+  <MudProgressLinear Indeterminate Color="Color.Primary" />
+}
+else if (_accounts.Count == 0)
+{
+  <MudAlert Severity="Severity.Info">
+    No JIT admin accounts found. Create one from the device actions menu on the Dashboard.
+  </MudAlert>
+}
+else
+{
+  <MudDataGrid T="JitAdminAccountDto" Items="_accounts" SortMode="SortMode.Single"
+    Filterable="false" Hideable="false">
+    <Columns>
+      <PropertyColumn Property="x => x.Username" Title="Username">
+        <CellTemplate>
+          <MudText Typo="Typo.body2" Style="font-family: monospace;">
+            @context.Item.Username
+          </MudText>
+        </CellTemplate>
+      </PropertyColumn>
+      <PropertyColumn Property="x => x.DeviceName" Title="Device" />
+      <PropertyColumn Property="x => x.CreatedByUserName" Title="Created By" />
+      <TemplateColumn T="JitAdminAccountDto" Title="Status" Sortable="false">
+        <CellTemplate>
+          @{
+            var (color, text) = GetStatusDisplay(context.Item.Status);
+          }
+          <MudChip T="string" Color="color" Size="Size.Small">@text</MudChip>
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="JitAdminAccountDto" Title="Created" Sortable="true" SortBy="x => x.CreatedAt">
+        <CellTemplate>
+          <MudTooltip Text="@context.Item.CreatedAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss")">
+            <MudText Typo="Typo.body2">@FormatRelativeTime(context.Item.CreatedAt)</MudText>
+          </MudTooltip>
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="JitAdminAccountDto" Title="Expires" Sortable="true" SortBy="x => x.ExpiresAt">
+        <CellTemplate>
+          @{
+            var isExpired = context.Item.ExpiresAt < DateTimeOffset.Now;
+            var expiresColor = isExpired ? "color: #ff5252;" : "";
+          }
+          <MudTooltip Text="@context.Item.ExpiresAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss")">
+            <MudText Typo="Typo.body2" Style="@expiresColor">@FormatRelativeTime(context.Item.ExpiresAt)</MudText>
+          </MudTooltip>
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="JitAdminAccountDto" Title="Actions" Sortable="false">
+        <CellTemplate>
+          @if (context.Item.Status == JitAdminAccountStatusDto.Active)
+          {
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+              Size="Size.Small" title="Delete Account" OnClick="@(() => DeleteAccount(context.Item))" />
+          }
+        </CellTemplate>
+      </TemplateColumn>
+    </Columns>
+  </MudDataGrid>
+}
+
+@code {
+  private bool _loading = true;
+  private List<JitAdminAccountDto> _accounts = [];
+
+  protected override async Task OnInitializedAsync()
+  {
+    await RefreshAccounts();
+  }
+
+  private async Task DeleteAccount(JitAdminAccountDto account)
+  {
+    var confirmed = await DialogService.ShowMessageBox(
+      "Delete JIT Admin Account",
+      $"Are you sure you want to delete the JIT admin account '{account.Username}' on {account.DeviceName}?",
+      "Delete", "Cancel");
+
+    if (confirmed != true)
+    {
+      return;
+    }
+
+    try
+    {
+      var result = await MainHub.Server.RequestDeleteJitAdmin(account.DeviceId, account.Id);
+      if (result.IsSuccess)
+      {
+        Snackbar.Add("JIT admin account deleted.", Severity.Success);
+        await RefreshAccounts();
+      }
+      else
+      {
+        Snackbar.Add($"Failed to delete account: {result.Reason}", Severity.Error);
+      }
+    }
+    catch (Exception ex)
+    {
+      Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+    }
+  }
+
+  private static string FormatRelativeTime(DateTimeOffset dateTime)
+  {
+    var now = DateTimeOffset.Now;
+    var diff = now - dateTime;
+
+    if (diff.TotalSeconds < 0)
+    {
+      var futureDiff = dateTime - now;
+      if (futureDiff.TotalMinutes < 1) return "in a few seconds";
+      if (futureDiff.TotalMinutes < 60) return $"in {(int)futureDiff.TotalMinutes}m";
+      if (futureDiff.TotalHours < 24) return $"in {(int)futureDiff.TotalHours}h {futureDiff.Minutes}m";
+      return $"in {(int)futureDiff.TotalDays}d";
+    }
+
+    if (diff.TotalMinutes < 1) return "just now";
+    if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}m ago";
+    if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}h {diff.Minutes}m ago";
+    return $"{(int)diff.TotalDays}d ago";
+  }
+
+  private static (Color color, string text) GetStatusDisplay(JitAdminAccountStatusDto status) => status switch
+  {
+    JitAdminAccountStatusDto.Active => (Color.Success, "Active"),
+    JitAdminAccountStatusDto.Expired => (Color.Warning, "Expired"),
+    JitAdminAccountStatusDto.ManuallyDeleted => (Color.Default, "Deleted"),
+    JitAdminAccountStatusDto.Failed => (Color.Error, "Failed"),
+    _ => (Color.Default, status.ToString()),
+  };
+
+  private async Task RefreshAccounts()
+  {
+    _loading = true;
+    StateHasChanged();
+
+    var result = await ControlrApi.Value.GetJitAdminAccounts();
+
+    if (result.IsSuccess)
+    {
+      _accounts = result.Value.ToList();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to load JIT admin accounts: {result.Reason}", Severity.Error);
+    }
+
+    _loading = false;
+  }
+}

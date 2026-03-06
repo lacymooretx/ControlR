@@ -18,9 +18,21 @@ public class TestAgentHubClient : IAgentHubClient
     return Task.FromResult(Result.Ok());
   }
 
+  public Task ClosePtySession(Guid terminalSessionId)
+  {
+    Console.WriteLine($"Closing PTY session {terminalSessionId}");
+    return Task.CompletedTask;
+  }
+
   public Task CloseTerminalSession(Guid terminalSessionId)
   {
     Console.WriteLine($"Closing terminal session {terminalSessionId}");
+    return Task.CompletedTask;
+  }
+
+  public Task CollectInventory()
+  {
+    Console.WriteLine("Collecting inventory.");
     return Task.CompletedTask;
   }
 
@@ -28,6 +40,24 @@ public class TestAgentHubClient : IAgentHubClient
   {
     Console.WriteLine($"Received create directory request for {dto.DirectoryName} in {dto.ParentPath}");
     return Result.Ok().AsTaskResult();
+  }
+
+  public Task<Result> CreateJitAdminAccount(CreateJitAdminRequestHubDto request)
+  {
+    Console.WriteLine($"Creating JIT admin account: {request.Username}");
+    return Task.FromResult(Result.Ok());
+  }
+
+  public Task<Result> DeleteJitAdminAccount(DeleteJitAdminRequestHubDto request)
+  {
+    Console.WriteLine($"Deleting JIT admin account: {request.Username}");
+    return Task.FromResult(Result.Ok());
+  }
+
+  public Task<Result> CreatePtySession(Guid terminalSessionId, string viewerConnectionId, int cols, int rows)
+  {
+    Console.WriteLine($"Creating PTY session {terminalSessionId}");
+    return Task.FromResult(Result.Ok());
   }
 
   public Task<Result> CreateRemoteControlSession(RemoteControlSessionRequestDto dto)
@@ -57,6 +87,18 @@ public class TestAgentHubClient : IAgentHubClient
   {
     Console.WriteLine($"Received file upload request for {dto.FileName} to {dto.TargetDirectoryPath}");
     return Result.Ok().AsTaskResult();
+  }
+
+  public Task<Result> MoveFile(MoveFileHubDto dto)
+  {
+    Console.WriteLine($"Received move file request: {dto.SourcePath} -> {dto.DestinationPath}");
+    return Result.Ok().AsTaskResult();
+  }
+
+  public Task ExecuteScript(ScriptExecutionRequestHubDto request)
+  {
+    Console.WriteLine($"Executing script.");
+    return Task.CompletedTask;
   }
 
   public Task<DesktopSession[]> GetActiveDesktopSessions()
@@ -135,10 +177,22 @@ public class TestAgentHubClient : IAgentHubClient
     return Task.CompletedTask;
   }
 
+  public Task<Result> RebootToSafeMode(SafeModeRebootRequestHubDto request)
+  {
+    Console.WriteLine($"Received Safe Mode reboot request. WithNetworking: {request.WithNetworking}");
+    return Task.FromResult(Result.Ok());
+  }
+
   public Task ReceivePowerStateChange(PowerStateChangeType changeType)
   {
     Console.WriteLine($"Received power state change: {changeType}");
     return Task.CompletedTask;
+  }
+
+  public Task<Result> ReceivePtyInput(PtyInputDto dto)
+  {
+    Console.WriteLine("Received PTY input.");
+    return Task.FromResult(Result.Ok());
   }
 
   public Task<Result> ReceiveTerminalInput(TerminalInputDto dto)
@@ -151,6 +205,12 @@ public class TestAgentHubClient : IAgentHubClient
   {
     Console.WriteLine("Refreshing device info.");
     return Task.CompletedTask;
+  }
+
+  public Task<Result> ResizePty(PtyResizeDto dto)
+  {
+    Console.WriteLine("Resizing PTY.");
+    return Task.FromResult(Result.Ok());
   }
 
   public Task<Result> RequestDesktopPreview(DesktopPreviewRequestDto dto)
@@ -180,6 +240,18 @@ public class TestAgentHubClient : IAgentHubClient
   public Task<Result> StreamSubdirectories(SubdirectoriesStreamRequestHubDto dto)
   {
     Console.WriteLine($"Streaming subdirectories for {dto.DirectoryPath} (stream {dto.StreamId})");
+    return Result.Ok().AsTaskResult();
+  }
+
+  public Task<Result> ScanForPatches(PatchScanRequestHubDto request)
+  {
+    Console.WriteLine("Scanning for patches.");
+    return Result.Ok().AsTaskResult();
+  }
+
+  public Task<Result> InstallPatches(PatchInstallRequestHubDto request)
+  {
+    Console.WriteLine($"Installing {request.UpdateIds.Length} patches.");
     return Result.Ok().AsTaskResult();
   }
 

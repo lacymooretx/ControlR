@@ -1,0 +1,190 @@
+@page "/session-recordings"
+@rendermode InteractiveWebAssembly
+@attribute [Authorize(Roles = RoleNames.TenantAdministrator)]
+@inject ILazyInjector<IControlrApi> ControlrApi
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager NavMan
+
+<MudText Typo="Typo.h4" Color="Color.Primary" GutterBottom>
+  Session Recordings
+</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+  <MudStack Row AlignItems="AlignItems.Center">
+    <MudSpacer />
+    <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Info"
+      OnClick="RefreshRecordings" />
+  </MudStack>
+</MudPaper>
+
+@if (_loading)
+{
+  <MudProgressLinear Indeterminate Color="Color.Primary" />
+}
+else if (_recordings.Count == 0)
+{
+  <MudAlert Severity="Severity.Info">
+    No session recordings found. Recordings are created when a user starts recording during a remote control session.
+  </MudAlert>
+}
+else
+{
+  <MudDataGrid T="SessionRecordingDto" Items="_recordings" SortMode="SortMode.Single"
+    Filterable="false" Hideable="false">
+    <Columns>
+      <PropertyColumn Property="x => x.DeviceName" Title="Device" />
+      <PropertyColumn Property="x => x.RecorderUserName" Title="Technician" />
+      <TemplateColumn T="SessionRecordingDto" Title="Started" Sortable="true" SortBy="x => x.SessionStartedAt">
+        <CellTemplate>
+          @context.Item.SessionStartedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="SessionRecordingDto" Title="Ended" Sortable="false">
+        <CellTemplate>
+          @if (context.Item.SessionEndedAt.HasValue)
+          {
+            @context.Item.SessionEndedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+          }
+          else
+          {
+            <MudText Typo="Typo.body2">--</MudText>
+          }
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="SessionRecordingDto" Title="Duration" Sortable="true" SortBy="x => x.DurationMs">
+        <CellTemplate>
+          @FormatDuration(context.Item.DurationMs)
+        </CellTemplate>
+      </TemplateColumn>
+      <PropertyColumn Property="x => x.FrameCount" Title="Frames" />
+      <TemplateColumn T="SessionRecordingDto" Title="Size" Sortable="true" SortBy="x => x.StorageSizeBytes">
+        <CellTemplate>
+          @FormatSize(context.Item.StorageSizeBytes)
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="SessionRecordingDto" Title="Status" Sortable="false">
+        <CellTemplate>
+          @{
+            var (color, label) = context.Item.Status switch
+            {
+              SessionRecordingStatusDto.Recording => (Color.Info, "Recording"),
+              SessionRecordingStatusDto.Completed => (Color.Success, "Completed"),
+              SessionRecordingStatusDto.Failed => (Color.Error, "Failed"),
+              SessionRecordingStatusDto.Deleted => (Color.Default, "Deleted"),
+              _ => (Color.Default, "Unknown")
+            };
+          }
+          <MudChip T="string" Color="color" Size="Size.Small">@label</MudChip>
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="SessionRecordingDto" Title="Actions" Sortable="false">
+        <CellTemplate>
+          @{
+            var recording = context.Item;
+          }
+          <MudStack Row>
+            @if (recording.Status == SessionRecordingStatusDto.Completed && recording.FrameCount > 0)
+            {
+              <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Color="Color.Primary"
+                Size="Size.Small" title="Play" OnClick="@(() => PlayRecording(recording))" />
+            }
+            @if (recording.Status != SessionRecordingStatusDto.Deleted)
+            {
+              <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+                Size="Size.Small" OnClick="@(() => DeleteRecording(recording))" />
+            }
+          </MudStack>
+        </CellTemplate>
+      </TemplateColumn>
+    </Columns>
+  </MudDataGrid>
+}
+
+@code {
+  private bool _loading = true;
+  private List<SessionRecordingDto> _recordings = [];
+
+  protected override async Task OnInitializedAsync()
+  {
+    await RefreshRecordings();
+  }
+
+  private async Task RefreshRecordings()
+  {
+    _loading = true;
+    StateHasChanged();
+
+    var result = await ControlrApi.Value.GetSessionRecordings();
+    if (result.IsSuccess)
+    {
+      _recordings = result.Value.ToList();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to load recordings: {result.Reason}", Severity.Error);
+    }
+
+    _loading = false;
+  }
+
+  private void PlayRecording(SessionRecordingDto recording)
+  {
+    NavMan.NavigateTo($"{ClientRoutes.SessionRecordingPlayback}?id={recording.Id}");
+  }
+
+  private async Task DeleteRecording(SessionRecordingDto recording)
+  {
+    var confirmed = await DialogService.ShowMessageBox(
+      "Delete Recording",
+      $"Are you sure you want to delete this recording from {recording.DeviceName ?? "unknown device"}?",
+      "Delete", "Cancel");
+
+    if (confirmed != true)
+    {
+      return;
+    }
+
+    var result = await ControlrApi.Value.DeleteSessionRecording(recording.Id);
+    if (result.IsSuccess)
+    {
+      Snackbar.Add("Recording deleted.", Severity.Success);
+      await RefreshRecordings();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to delete recording: {result.Reason}", Severity.Error);
+    }
+  }
+
+  private static string FormatDuration(long durationMs)
+  {
+    var ts = TimeSpan.FromMilliseconds(durationMs);
+    if (ts.TotalHours >= 1)
+    {
+      return $"{(int)ts.TotalHours}h {ts.Minutes}m {ts.Seconds}s";
+    }
+    if (ts.TotalMinutes >= 1)
+    {
+      return $"{ts.Minutes}m {ts.Seconds}s";
+    }
+    return $"{ts.Seconds}s";
+  }
+
+  private static string FormatSize(long bytes)
+  {
+    if (bytes >= 1_073_741_824)
+    {
+      return $"{bytes / 1_073_741_824.0:F1} GB";
+    }
+    if (bytes >= 1_048_576)
+    {
+      return $"{bytes / 1_048_576.0:F1} MB";
+    }
+    if (bytes >= 1024)
+    {
+      return $"{bytes / 1024.0:F1} KB";
+    }
+    return $"{bytes} B";
+  }
+}

@@ -1,0 +1,264 @@
+@page "/support-sessions"
+@rendermode InteractiveWebAssembly
+@attribute [Authorize(Roles = RoleNames.TenantAdministrator)]
+@implements IDisposable
+@inject ILazyInjector<IControlrApi> ControlrApi
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager NavMan
+@inject IJSRuntime JsRuntime
+
+<MudText Typo="Typo.h4" Color="Color.Primary" GutterBottom>
+  Support Sessions
+</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+  <MudStack Row AlignItems="AlignItems.Center">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+      StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+      New Session
+    </MudButton>
+    <MudSpacer />
+    <MudSelect T="string" Label="Status Filter" Value="_statusFilter"
+      ValueChanged="OnStatusFilterChanged" Style="max-width: 200px;" Variant="Variant.Outlined" Dense>
+      <MudSelectItem T="string" Value="@("")">All</MudSelectItem>
+      <MudSelectItem T="string" Value="@("Pending")">Pending</MudSelectItem>
+      <MudSelectItem T="string" Value="@("WaitingForClient")">Waiting for Client</MudSelectItem>
+      <MudSelectItem T="string" Value="@("InProgress")">In Progress</MudSelectItem>
+      <MudSelectItem T="string" Value="@("Completed")">Completed</MudSelectItem>
+      <MudSelectItem T="string" Value="@("Expired")">Expired</MudSelectItem>
+      <MudSelectItem T="string" Value="@("Cancelled")">Cancelled</MudSelectItem>
+    </MudSelect>
+    <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Info"
+      OnClick="RefreshSessions" />
+  </MudStack>
+</MudPaper>
+
+@if (_loading)
+{
+  <MudProgressLinear Indeterminate Color="Color.Primary" />
+}
+else if (_sessions.Count == 0)
+{
+  <MudAlert Severity="Severity.Info">
+    No support sessions found. Create a session to generate an access code for a client.
+  </MudAlert>
+}
+else
+{
+  <MudDataGrid T="SupportSessionDto" Items="_sessions" SortMode="SortMode.Single"
+    Filterable="false" Hideable="false">
+    <Columns>
+      <TemplateColumn T="SupportSessionDto" Title="Access Code" Sortable="false">
+        <CellTemplate>
+          <MudStack Row AlignItems="AlignItems.Center">
+            <MudText Typo="Typo.body2" Style="font-family: monospace; font-size: 1.1em; letter-spacing: 2px;">
+              @context.Item.AccessCode
+            </MudText>
+            <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Color="Color.Default"
+              Size="Size.Small" title="Copy code" OnClick="@(() => CopyToClipboard(context.Item.AccessCode, "Access code"))" />
+          </MudStack>
+        </CellTemplate>
+      </TemplateColumn>
+      <PropertyColumn Property="x => x.ClientName" Title="Client Name" />
+      <PropertyColumn Property="x => x.CreatorUserName" Title="Technician" />
+      <TemplateColumn T="SupportSessionDto" Title="Status" Sortable="false">
+        <CellTemplate>
+          @{
+            var (color, text) = GetStatusDisplay(context.Item.Status);
+          }
+          <MudChip T="string" Color="color" Size="Size.Small">@text</MudChip>
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="SupportSessionDto" Title="Created" Sortable="true" SortBy="x => x.CreatedAt">
+        <CellTemplate>
+          <MudTooltip Text="@context.Item.CreatedAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss")">
+            <MudText Typo="Typo.body2">@FormatRelativeTime(context.Item.CreatedAt)</MudText>
+          </MudTooltip>
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="SupportSessionDto" Title="Expires" Sortable="true" SortBy="x => x.ExpiresAt">
+        <CellTemplate>
+          <MudTooltip Text="@context.Item.ExpiresAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss")">
+            <MudText Typo="Typo.body2">@FormatRelativeTime(context.Item.ExpiresAt)</MudText>
+          </MudTooltip>
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="SupportSessionDto" Title="Actions" Sortable="false">
+        <CellTemplate>
+          @{
+            var session = context.Item;
+          }
+          <MudStack Row>
+            @if (session.Status is SupportSessionStatusDto.Pending or SupportSessionStatusDto.WaitingForClient)
+            {
+              <MudIconButton Icon="@Icons.Material.Filled.Cancel" Color="Color.Error"
+                Size="Size.Small" title="Cancel" OnClick="@(() => CancelSession(session))" />
+            }
+            @if (session.Status == SupportSessionStatusDto.InProgress)
+            {
+              <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success"
+                Size="Size.Small" title="Complete" OnClick="@(() => CompleteSession(session))" />
+            }
+            <MudIconButton Icon="@Icons.Material.Filled.Share" Color="Color.Default"
+              Size="Size.Small" title="Copy link" OnClick="@(() => CopyShareLink(session))" />
+          </MudStack>
+        </CellTemplate>
+      </TemplateColumn>
+    </Columns>
+  </MudDataGrid>
+}
+
+@code {
+  private bool _loading = true;
+  private List<SupportSessionDto> _sessions = [];
+  private string _statusFilter = "";
+  private Timer? _autoRefreshTimer;
+
+  protected override async Task OnInitializedAsync()
+  {
+    await RefreshSessions();
+    _autoRefreshTimer = new Timer(AutoRefreshCallback, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+  }
+
+  public void Dispose()
+  {
+    _autoRefreshTimer?.Dispose();
+  }
+
+  private async void AutoRefreshCallback(object? state)
+  {
+    await InvokeAsync(async () =>
+    {
+      await RefreshSessions();
+      StateHasChanged();
+    });
+  }
+
+  private async Task CancelSession(SupportSessionDto session)
+  {
+    var confirmed = await DialogService.ShowMessageBox(
+      "Cancel Session",
+      $"Are you sure you want to cancel this support session (code: {session.AccessCode})?",
+      "Cancel Session", "Keep");
+
+    if (confirmed != true)
+    {
+      return;
+    }
+
+    var result = await ControlrApi.Value.CancelSupportSession(session.Id);
+    if (result.IsSuccess)
+    {
+      Snackbar.Add("Session cancelled.", Severity.Success);
+      await RefreshSessions();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to cancel session: {result.Reason}", Severity.Error);
+    }
+  }
+
+  private async Task CompleteSession(SupportSessionDto session)
+  {
+    var result = await ControlrApi.Value.CompleteSupportSession(session.Id);
+    if (result.IsSuccess)
+    {
+      Snackbar.Add("Session marked as completed.", Severity.Success);
+      await RefreshSessions();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to complete session: {result.Reason}", Severity.Error);
+    }
+  }
+
+  private async Task CopyToClipboard(string text, string label)
+  {
+    try
+    {
+      await JsRuntime.InvokeVoidAsync("navigator.clipboard.writeText", text);
+      Snackbar.Add($"{label} copied to clipboard.", Severity.Success);
+    }
+    catch
+    {
+      Snackbar.Add($"{label}: {text}", Severity.Info);
+    }
+  }
+
+  private async Task CopyShareLink(SupportSessionDto session)
+  {
+    var link = $"{NavMan.BaseUri}support?code={session.AccessCode}";
+    await CopyToClipboard(link, "Share link");
+  }
+
+  private static string FormatRelativeTime(DateTimeOffset dateTime)
+  {
+    var now = DateTimeOffset.Now;
+    var diff = now - dateTime;
+
+    if (diff.TotalSeconds < 0)
+    {
+      // Future time
+      var futureDiff = dateTime - now;
+      if (futureDiff.TotalMinutes < 1) return "in a few seconds";
+      if (futureDiff.TotalMinutes < 60) return $"in {(int)futureDiff.TotalMinutes}m";
+      if (futureDiff.TotalHours < 24) return $"in {(int)futureDiff.TotalHours}h {futureDiff.Minutes}m";
+      return $"in {(int)futureDiff.TotalDays}d";
+    }
+
+    if (diff.TotalMinutes < 1) return "just now";
+    if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}m ago";
+    if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}h {diff.Minutes}m ago";
+    return $"{(int)diff.TotalDays}d ago";
+  }
+
+  private static (Color color, string text) GetStatusDisplay(SupportSessionStatusDto status) => status switch
+  {
+    SupportSessionStatusDto.Pending => (Color.Default, "Pending"),
+    SupportSessionStatusDto.WaitingForClient => (Color.Info, "Waiting for Client"),
+    SupportSessionStatusDto.InProgress => (Color.Success, "In Progress"),
+    SupportSessionStatusDto.Completed => (Color.Default, "Completed"),
+    SupportSessionStatusDto.Expired => (Color.Warning, "Expired"),
+    SupportSessionStatusDto.Cancelled => (Color.Error, "Cancelled"),
+    _ => (Color.Default, status.ToString()),
+  };
+
+  private async Task OnStatusFilterChanged(string value)
+  {
+    _statusFilter = value;
+    await RefreshSessions();
+  }
+
+  private async Task OpenCreateDialog()
+  {
+    var dialog = await DialogService.ShowAsync<SupportSessionCreateDialog>("New Support Session",
+      new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+    var dialogResult = await dialog.Result;
+
+    if (dialogResult is { Canceled: false })
+    {
+      await RefreshSessions();
+    }
+  }
+
+  private async Task RefreshSessions()
+  {
+    _loading = true;
+    StateHasChanged();
+
+    var result = await ControlrApi.Value.GetSupportSessions(
+      string.IsNullOrEmpty(_statusFilter) ? null : _statusFilter);
+
+    if (result.IsSuccess)
+    {
+      _sessions = result.Value.ToList();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to load support sessions: {result.Reason}", Severity.Error);
+    }
+
+    _loading = false;
+  }
+}

@@ -1,0 +1,108 @@
+@inject IControlrApi ControlrApi
+@inject ISnackbar Snackbar
+
+<MudDialog>
+  <DialogContent>
+    <MudTextField @bind-Value="_name" Label="Name" Required />
+    <MudTextField @bind-Value="_assemblyPath" Label="Assembly Path" Required Class="mt-2"
+      HelperText="Relative path under the server's plugins directory (e.g. MyPlugin/MyPlugin.dll)" />
+    <MudTextField @bind-Value="_pluginTypeName" Label="Plugin Type Name" Required Class="mt-2"
+      HelperText="Fully qualified type name implementing IControlRPlugin" />
+    <MudTextField @bind-Value="_configurationJson" Label="Configuration (JSON)" Class="mt-2"
+      Lines="4"
+      HelperText="Optional JSON configuration passed to the plugin" />
+
+    @if (Plugin is not null)
+    {
+      <MudSwitch T="bool" @bind-Value="_isEnabled" Label="Enabled" Color="Color.Success" Class="mt-3" />
+    }
+  </DialogContent>
+  <DialogActions>
+    <MudButton OnClick="Cancel">Cancel</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save"
+      Disabled="@(_saving || string.IsNullOrWhiteSpace(_name) || string.IsNullOrWhiteSpace(_assemblyPath) || string.IsNullOrWhiteSpace(_pluginTypeName))">
+      @if (_saving)
+      {
+        <MudProgressCircular Indeterminate Size="Size.Small" Class="mr-2" />
+      }
+      Save
+    </MudButton>
+  </DialogActions>
+</MudDialog>
+
+@code {
+  [CascadingParameter]
+  private IMudDialogInstance MudDialog { get; set; } = null!;
+
+  [Parameter]
+  public PluginRegistrationDto? Plugin { get; set; }
+
+  private string _assemblyPath = string.Empty;
+  private string? _configurationJson;
+  private bool _isEnabled = true;
+  private string _name = string.Empty;
+  private string _pluginTypeName = string.Empty;
+  private bool _saving;
+
+  protected override void OnInitialized()
+  {
+    if (Plugin is not null)
+    {
+      _assemblyPath = Plugin.AssemblyPath;
+      _configurationJson = Plugin.ConfigurationJson;
+      _isEnabled = Plugin.IsEnabled;
+      _name = Plugin.Name;
+      _pluginTypeName = Plugin.PluginTypeName;
+    }
+  }
+
+  private void Cancel() => MudDialog.Cancel();
+
+  private async Task Save()
+  {
+    _saving = true;
+
+    if (Plugin is null)
+    {
+      var request = new CreatePluginRequestDto(
+        _name,
+        _assemblyPath,
+        _pluginTypeName,
+        _isEnabled,
+        string.IsNullOrWhiteSpace(_configurationJson) ? null : _configurationJson);
+
+      var result = await ControlrApi.CreatePlugin(request);
+      if (!result.IsSuccess)
+      {
+        Snackbar.Add(result.Reason, Severity.Error);
+        _saving = false;
+        return;
+      }
+
+      Snackbar.Add("Plugin registered.", Severity.Success);
+    }
+    else
+    {
+      var request = new UpdatePluginRequestDto(
+        Plugin.Id,
+        _name,
+        _assemblyPath,
+        _pluginTypeName,
+        _isEnabled,
+        string.IsNullOrWhiteSpace(_configurationJson) ? null : _configurationJson);
+
+      var result = await ControlrApi.UpdatePlugin(request);
+      if (!result.IsSuccess)
+      {
+        Snackbar.Add(result.Reason, Severity.Error);
+        _saving = false;
+        return;
+      }
+
+      Snackbar.Add("Plugin updated.", Severity.Success);
+    }
+
+    _saving = false;
+    MudDialog.Close(DialogResult.Ok(true));
+  }
+}

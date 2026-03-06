@@ -15,21 +15,37 @@ public interface IControlrApi
       string emailAddress,
       string password);
   Task<Result<AlertDto>> AcknowledgeAlert(Guid alertId);
+  Task<Result<ActionVerificationStatusDto>> GetActionVerificationStatus();
+  Task<Result<ActionVerificationStatusDto>> VerifyAction(ActionVerificationRequestDto request);
   Task<Result> AddDeviceTag(Guid deviceId, Guid tagId);
   Task<Result> AddUserRole(Guid userId, Guid roleId);
   Task<Result> AddUserTag(Guid userId, Guid tagId);
   Task<Result<AlertRuleDto>> CreateAlertRule(AlertRuleCreateRequestDto request);
   Task<Result<ClientDeviceAssignmentDto>> CreateClientDeviceAssignment(ClientDeviceAssignmentCreateRequestDto request);
+  Task<Result<StoredCredentialDto>> CreateCredential(CreateCredentialRequestDto request);
+  Task<Result> DeleteCredential(Guid credentialId);
+  Task<Result<StoredCredentialDto[]>> GetAllCredentials();
+  Task<Result<StoredCredentialDto[]>> GetCredentialsForDevice(Guid deviceId);
+  Task<Result<StoredCredentialWithPasswordDto>> RetrieveCredentialPassword(Guid credentialId);
+  Task<Result<StoredCredentialDto>> UpdateCredential(Guid credentialId, UpdateCredentialRequestDto request);
+  Task<Result> DeleteBrandingLogo();
+  Task<Result<BrandingSettingsDto>> GetBranding();
+  Task<Result<BrandingSettingsDto>> UpdateBranding(UpdateBrandingRequestDto request);
+  Task<Result<BrandingSettingsDto>> UploadBrandingLogo(Stream fileStream, string fileName);
   Task<Result> CreateDevice(DeviceUpdateRequestDto device, Guid installerKeyId, string installerKeySecret, Guid[]? tagIds);
   Task<Result<DeviceGroupDto>> CreateDeviceGroup(DeviceGroupCreateRequestDto request);
   Task<Result> CreateDirectory(Guid deviceId, string parentPath, string directoryName);
   Task<Result<CreateInstallerKeyResponseDto>> CreateInstallerKey(CreateInstallerKeyRequestDto dto);
+  Task<Result<PluginRegistrationDto>> CreatePlugin(CreatePluginRequestDto request);
   Task<Result<CreatePersonalAccessTokenResponseDto>> CreatePersonalAccessToken(CreatePersonalAccessTokenRequestDto request);
   Task<Result<ScheduledTaskDto>> CreateScheduledTask(ScheduledTaskCreateRequestDto request);
   Task<Result<SavedScriptDto>> CreateScript(SavedScriptCreateRequestDto request);
   Task<Result<TagResponseDto>> CreateTag(string tagName, TagType tagType);
   Task<Result<TenantInviteResponseDto>> CreateTenantInvite(string inviteeEmail);
   Task<Result<WebhookSubscriptionDto>> CreateWebhook(WebhookCreateRequestDto request);
+  Task<Result<SupportSessionDto>> CreateSupportSession(SupportSessionCreateRequestDto request);
+  Task<Result> CancelSupportSession(Guid sessionId);
+  Task<Result<SupportSessionDto>> CompleteSupportSession(Guid sessionId);
   Task<Result> DeleteAlertRule(Guid ruleId);
   Task<Result> DeleteClientDeviceAssignment(Guid assignmentId);
   Task<Result> DeleteDevice(Guid deviceId);
@@ -37,12 +53,15 @@ public interface IControlrApi
   Task<Result> DeleteFile(Guid deviceId, string filePath, bool isDirectory);
   Task<Result> DeleteInstallerKey(Guid keyId);
   Task<Result> DeletePersonalAccessToken(Guid personalAccessTokenId);
+  Task<Result> DeletePlugin(Guid pluginId);
   Task<Result> DeleteScheduledTask(Guid taskId);
   Task<Result> DeleteScript(Guid scriptId);
   Task<Result> DeleteTag(Guid tagId);
   Task<Result> DeleteTenantInvite(Guid inviteId);
   Task<Result> DeleteTenantSetting(string settingName);
   Task<Result> DeleteUser(Guid userId);
+  Task<Result> DeleteSessionRecording(Guid recordingId);
+  Task<Result> DeleteToolboxItem(Guid itemId);
   Task<Result> DeleteWebhook(Guid webhookId);
   Task<Result<Stream>> DownloadFile(Guid deviceId, string filePath);
   Task<Result<AlertDto[]>> GetAlerts(string? status = null, int count = 50);
@@ -55,6 +74,7 @@ public interface IControlrApi
   Task<Result<SavedScriptDto[]>> GetAllScripts();
   Task<Result<TagResponseDto[]>> GetAllTags(bool includeLinkedIds = false);
   Task<Result<UserResponseDto[]>> GetAllUsers();
+  Task<Result<PluginRegistrationDto[]>> GetAllPlugins();
   Task<Result<WebhookSubscriptionDto[]>> GetAllWebhooks();
   Task<Result<TagResponseDto[]>> GetAllowedTags();
   Task<Result<GetAspireUrlResponseDto>> GetAspireUrl();
@@ -73,6 +93,7 @@ public interface IControlrApi
   Task<Result<GetDirectoryContentsResponseDto>> GetDirectoryContents(Guid deviceId, string directoryPath);
   Task<Result<long>> GetFileUploadMaxSize();
   Task<Result<AgentInstallerKeyUsageDto[]>> GetInstallerKeyUsages(Guid keyId);
+  Task<Result<JitAdminAccountDto[]>> GetJitAdminAccounts();
   Task<Result<string>> GetLogFileContents(Guid deviceId, string filePath);
   Task<Result<GetLogFilesResponseDto>> GetLogFiles(Guid deviceId);
   Task<Result<PathSegmentsResponseDto>> GetPathSegments(Guid deviceId, string targetPath);
@@ -86,12 +107,20 @@ public interface IControlrApi
   Task<Result<ScriptExecutionDto>> GetScriptExecution(Guid executionId);
   Task<Result<ServerAlertResponseDto?>> GetServerAlert();
   Task<Result<ServerStatsDto>> GetServerStats();
+  Task<Result<SessionRecordingDto>> GetSessionRecording(Guid recordingId);
+  Task<Result<long[]>> GetSessionRecordingFrameList(Guid recordingId);
+  Task<Result<SessionRecordingDto[]>> GetSessionRecordings();
+  Task<Result<SupportSessionDto[]>> GetSupportSessions(string? status = null);
   Task<Result<GetSubdirectoriesResponseDto>> GetSubdirectories(Guid deviceId, string directoryPath);
+  Task<Result<ToolboxItemDto>> GetToolboxItem(Guid itemId);
+  Task<Result<ToolboxItemDto[]>> GetToolboxItems();
   Task<Result<TenantSettingResponseDto?>> GetTenantSetting(string settingName);
   Task<Result<UserPreferenceResponseDto?>> GetUserPreference(string preferenceName);
   Task<Result<TagResponseDto[]>> GetUserTags(Guid userId, bool includeLinkedIds = false);
   Task<Result<WebhookDeliveryLogDto[]>> GetWebhookDeliveries(Guid webhookId, int count = 50);
+  Task<Result<SupportSessionJoinResponseDto>> JoinSupportSession(SupportSessionJoinRequestDto request);
   Task<Result> LogOut();
+  Task<Result> MoveFile(Guid deviceId, string sourcePath, string destinationPath);
   Task<Result> RemoveDeviceTag(Guid deviceId, Guid tagId);
   Task<Result> RemoveUserRole(Guid userId, Guid roleId);
   Task<Result> RemoveUserTag(Guid userId, Guid tagId);
@@ -102,9 +131,19 @@ public interface IControlrApi
   Task<Result<DeviceSearchResponseDto>> SearchDevices(DeviceSearchRequestDto request);
   Task<Result<InventorySearchResultDto[]>> SearchInventory(InventorySearchRequestDto request);
   Task<Result> SendTestEmail();
+  Task<Result<SessionRecordingDto>> StartRecording(StartRecordingRequestDto request);
+  Task<Result<SessionRecordingDto>> StopRecording(Guid recordingId);
   Task<Result<TenantSettingResponseDto>> SetTenantSetting(string settingName, string settingValue);
   Task<Result<UserPreferenceResponseDto>> SetUserPreference(string preferenceName, string preferenceValue);
+  Task<Result> ReloadPlugins();
   Task<Result> TestWebhook(Guid webhookId);
+  Task<Result<TicketingIntegrationDto[]>> GetAllTicketingIntegrations();
+  Task<Result<TicketingIntegrationDto>> CreateTicketingIntegration(CreateTicketingIntegrationDto request);
+  Task<Result<TicketingIntegrationDto>> UpdateTicketingIntegration(Guid id, UpdateTicketingIntegrationDto request);
+  Task<Result> DeleteTicketingIntegration(Guid id);
+  Task<Result<TicketLinkDto>> CreateTicket(CreateTicketRequestDto request);
+  Task<Result<TicketLinkDto[]>> GetTicketLinks(Guid? deviceId = null, Guid? sessionId = null, Guid? alertId = null);
+  Task<Result> DeleteTicketLink(Guid id);
   Task<Result<ScheduledTaskExecutionDto>> TriggerScheduledTask(Guid taskId);
   Task<Result<AlertRuleDto>> UpdateAlertRule(AlertRuleUpdateRequestDto request);
   Task<Result<DeviceGroupDto>> UpdateDeviceGroup(DeviceGroupUpdateRequestDto request);
@@ -112,8 +151,17 @@ public interface IControlrApi
   Task<Result<ScheduledTaskDto>> UpdateScheduledTask(ScheduledTaskUpdateRequestDto request);
   Task<Result<SavedScriptDto>> UpdateScript(SavedScriptUpdateRequestDto request);
   Task<Result<ServerAlertResponseDto>> UpdateServerAlert(ServerAlertRequestDto request);
+  Task<Result<PluginRegistrationDto>> UpdatePlugin(UpdatePluginRequestDto request);
+  Task<Result<ToolboxItemDto>> UpdateToolboxItem(ToolboxItemUpdateRequestDto request);
+  Task<Result> UploadRecordingFrame(Guid recordingId, byte[] jpegData, long timestampMs);
+  Task<Result<ToolboxItemDto>> UploadToolboxItem(ToolboxItemCreateRequestDto metadata, Stream fileStream, string fileName);
   Task<Result<WebhookSubscriptionDto>> UpdateWebhook(WebhookUpdateRequestDto request);
   Task<Result<ValidateFilePathResponseDto>> ValidateFilePath(Guid deviceId, string directoryPath, string fileName);
+  Task<Result<AutomationSuggestionDto[]>> GetSuggestions(string? status = null, int count = 50);
+  Task<Result<AutomationSuggestionDto>> UpdateSuggestion(Guid suggestionId, AutomationSuggestionUpdateRequestDto request);
+  Task<Result<PendingPatchDto[]>> GetPendingPatches(Guid? deviceId = null);
+  Task<Result<PendingPatchDto[]>> GetDevicePendingPatches(Guid deviceId);
+  Task<Result<PatchInstallationDto[]>> GetPatchInstallations(Guid? deviceId = null, int count = 50);
 }
 
 public class ControlrApi(
@@ -137,6 +185,43 @@ public class ControlrApi(
     });
   }
 
+  public async Task<Result> DeleteBrandingLogo()
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.DeleteAsync($"{HttpConstants.BrandingEndpoint}/logo");
+      response.EnsureSuccessStatusCode();
+    });
+  }
+
+  public async Task<Result<BrandingSettingsDto>> GetBranding()
+  {
+    return await TryCallApi(async () =>
+      await _client.GetFromJsonAsync<BrandingSettingsDto>(HttpConstants.BrandingEndpoint));
+  }
+
+  public async Task<Result<BrandingSettingsDto>> UpdateBranding(UpdateBrandingRequestDto request)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.PutAsJsonAsync(HttpConstants.BrandingEndpoint, request);
+      response.EnsureSuccessStatusCode();
+      return await response.Content.ReadFromJsonAsync<BrandingSettingsDto>();
+    });
+  }
+
+  public async Task<Result<BrandingSettingsDto>> UploadBrandingLogo(Stream fileStream, string fileName)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var content = new MultipartFormDataContent();
+      content.Add(new StreamContent(fileStream), "file", fileName);
+      using var response = await _client.PostAsync($"{HttpConstants.BrandingEndpoint}/logo", content);
+      response.EnsureSuccessStatusCode();
+      return await response.Content.ReadFromJsonAsync<BrandingSettingsDto>();
+    });
+  }
+
   public async Task<Result<AlertDto>> AcknowledgeAlert(Guid alertId)
   {
     return await TryCallApi(async () =>
@@ -144,6 +229,26 @@ public class ControlrApi(
       using var response = await _client.PostAsync($"{HttpConstants.AlertsEndpoint}/{alertId}/acknowledge", null);
       response.EnsureSuccessStatusCode();
       return await response.Content.ReadFromJsonAsync<AlertDto>();
+    });
+  }
+
+  public async Task<Result<ActionVerificationStatusDto>> GetActionVerificationStatus()
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.GetAsync($"{HttpConstants.ActionVerificationEndpoint}/status");
+      response.EnsureSuccessStatusCode();
+      return await response.Content.ReadFromJsonAsync<ActionVerificationStatusDto>();
+    });
+  }
+
+  public async Task<Result<ActionVerificationStatusDto>> VerifyAction(ActionVerificationRequestDto request)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.PostAsJsonAsync($"{HttpConstants.ActionVerificationEndpoint}/verify", request);
+      response.EnsureSuccessStatusCode();
+      return await response.Content.ReadFromJsonAsync<ActionVerificationStatusDto>();
     });
   }
 
@@ -194,6 +299,60 @@ public class ControlrApi(
       using var response = await _client.PostAsJsonAsync($"{HttpConstants.ClientPortalEndpoint}/assignments", request);
       response.EnsureSuccessStatusCode();
       return await response.Content.ReadFromJsonAsync<ClientDeviceAssignmentDto>();
+    });
+  }
+
+  public async Task<Result<StoredCredentialDto>> CreateCredential(CreateCredentialRequestDto request)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.PostAsJsonAsync(HttpConstants.CredentialsEndpoint, request);
+      response.EnsureSuccessStatusCode();
+      return await response.Content.ReadFromJsonAsync<StoredCredentialDto>();
+    });
+  }
+
+  public async Task<Result> DeleteCredential(Guid credentialId)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.DeleteAsync($"{HttpConstants.CredentialsEndpoint}/{credentialId}");
+      response.EnsureSuccessStatusCode();
+    });
+  }
+
+  public async Task<Result<StoredCredentialDto[]>> GetAllCredentials()
+  {
+    return await TryCallApi(async () =>
+      await _client.GetFromJsonAsync<StoredCredentialDto[]>(HttpConstants.CredentialsEndpoint));
+  }
+
+  public async Task<Result<StoredCredentialDto[]>> GetCredentialsForDevice(Guid deviceId)
+  {
+    return await TryCallApi(async () =>
+      await _client.GetFromJsonAsync<StoredCredentialDto[]>(
+        $"{HttpConstants.CredentialsEndpoint}/for-device/{deviceId}"));
+  }
+
+  public async Task<Result<StoredCredentialWithPasswordDto>> RetrieveCredentialPassword(Guid credentialId)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.PostAsync(
+        $"{HttpConstants.CredentialsEndpoint}/{credentialId}/retrieve", null);
+      response.EnsureSuccessStatusCode();
+      return await response.Content.ReadFromJsonAsync<StoredCredentialWithPasswordDto>();
+    });
+  }
+
+  public async Task<Result<StoredCredentialDto>> UpdateCredential(Guid credentialId, UpdateCredentialRequestDto request)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.PutAsJsonAsync(
+        $"{HttpConstants.CredentialsEndpoint}/{credentialId}", request);
+      response.EnsureSuccessStatusCode();
+      return await response.Content.ReadFromJsonAsync<StoredCredentialDto>();
     });
   }
 
@@ -303,6 +462,16 @@ public class ControlrApi(
     });
   }
 
+  public async Task<Result<PluginRegistrationDto>> CreatePlugin(CreatePluginRequestDto request)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.PostAsJsonAsync(HttpConstants.PluginsEndpoint, request);
+      response.EnsureSuccessStatusCode();
+      return await response.Content.ReadFromJsonAsync<PluginRegistrationDto>();
+    });
+  }
+
   public async Task<Result<WebhookSubscriptionDto>> CreateWebhook(WebhookCreateRequestDto request)
   {
     return await TryCallApi(async () =>
@@ -310,6 +479,58 @@ public class ControlrApi(
       using var response = await _client.PostAsJsonAsync(HttpConstants.WebhooksEndpoint, request);
       response.EnsureSuccessStatusCode();
       return await response.Content.ReadFromJsonAsync<WebhookSubscriptionDto>();
+    });
+  }
+
+  public async Task<Result<SupportSessionDto>> CreateSupportSession(SupportSessionCreateRequestDto request)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.PostAsJsonAsync(HttpConstants.SupportSessionsEndpoint, request);
+      response.EnsureSuccessStatusCode();
+      return await response.Content.ReadFromJsonAsync<SupportSessionDto>();
+    });
+  }
+
+  public async Task<Result> CancelSupportSession(Guid sessionId)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.DeleteAsync($"{HttpConstants.SupportSessionsEndpoint}/{sessionId}");
+      response.EnsureSuccessStatusCode();
+    });
+  }
+
+  public async Task<Result<SupportSessionDto>> CompleteSupportSession(Guid sessionId)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.PutAsync($"{HttpConstants.SupportSessionsEndpoint}/{sessionId}/complete", null);
+      response.EnsureSuccessStatusCode();
+      return await response.Content.ReadFromJsonAsync<SupportSessionDto>();
+    });
+  }
+
+  public async Task<Result<SupportSessionDto[]>> GetSupportSessions(string? status = null)
+  {
+    return await TryCallApi(async () =>
+    {
+      var url = HttpConstants.SupportSessionsEndpoint;
+      if (!string.IsNullOrEmpty(status))
+      {
+        url += $"?status={Uri.EscapeDataString(status)}";
+      }
+      return await _client.GetFromJsonAsync<SupportSessionDto[]>(url);
+    });
+  }
+
+  public async Task<Result<SupportSessionJoinResponseDto>> JoinSupportSession(SupportSessionJoinRequestDto request)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.PostAsJsonAsync($"{HttpConstants.SupportSessionsEndpoint}/join", request);
+      response.EnsureSuccessStatusCode();
+      return await response.Content.ReadFromJsonAsync<SupportSessionJoinResponseDto>();
     });
   }
 
@@ -435,6 +656,33 @@ public class ControlrApi(
     });
   }
 
+  public async Task<Result> DeleteSessionRecording(Guid recordingId)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.DeleteAsync($"{HttpConstants.SessionRecordingsEndpoint}/{recordingId}");
+      response.EnsureSuccessStatusCode();
+    });
+  }
+
+  public async Task<Result> DeleteToolboxItem(Guid itemId)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.DeleteAsync($"{HttpConstants.ToolboxEndpoint}/{itemId}");
+      response.EnsureSuccessStatusCode();
+    });
+  }
+
+  public async Task<Result> DeletePlugin(Guid pluginId)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.DeleteAsync($"{HttpConstants.PluginsEndpoint}/{pluginId}");
+      response.EnsureSuccessStatusCode();
+    });
+  }
+
   public async Task<Result> DeleteWebhook(Guid webhookId)
   {
     return await TryCallApi(async () =>
@@ -528,6 +776,12 @@ public class ControlrApi(
   {
     return await TryCallApi(async () =>
       await _client.GetFromJsonAsync<UserResponseDto[]>(HttpConstants.UsersEndpoint));
+  }
+
+  public async Task<Result<PluginRegistrationDto[]>> GetAllPlugins()
+  {
+    return await TryCallApi(async () =>
+      await _client.GetFromJsonAsync<PluginRegistrationDto[]>(HttpConstants.PluginsEndpoint));
   }
 
   public async Task<Result<WebhookSubscriptionDto[]>> GetAllWebhooks()
@@ -663,6 +917,12 @@ public class ControlrApi(
       await _client.GetFromJsonAsync<AgentInstallerKeyUsageDto[]>($"{HttpConstants.InstallerKeysEndpoint}/usages/{keyId}"));
   }
 
+  public async Task<Result<JitAdminAccountDto[]>> GetJitAdminAccounts()
+  {
+    return await TryCallApi(async () =>
+      await _client.GetFromJsonAsync<JitAdminAccountDto[]>(HttpConstants.JitAdminEndpoint));
+  }
+
   public async Task<Result<string>> GetLogFileContents(Guid deviceId, string filePath)
   {
     return await TryCallApi(async () =>
@@ -772,6 +1032,38 @@ public class ControlrApi(
       await _client.GetFromJsonAsync<ServerStatsDto>(HttpConstants.ServerStatsEndpoint));
   }
 
+  public async Task<Result<SessionRecordingDto>> GetSessionRecording(Guid recordingId)
+  {
+    return await TryCallApi(async () =>
+      await _client.GetFromJsonAsync<SessionRecordingDto>(
+        $"{HttpConstants.SessionRecordingsEndpoint}/{recordingId}"));
+  }
+
+  public async Task<Result<long[]>> GetSessionRecordingFrameList(Guid recordingId)
+  {
+    return await TryCallApi(async () =>
+      await _client.GetFromJsonAsync<long[]>(
+        $"{HttpConstants.SessionRecordingsEndpoint}/{recordingId}/frames"));
+  }
+
+  public async Task<Result<SessionRecordingDto[]>> GetSessionRecordings()
+  {
+    return await TryCallApi(async () =>
+      await _client.GetFromJsonAsync<SessionRecordingDto[]>(HttpConstants.SessionRecordingsEndpoint));
+  }
+
+  public async Task<Result<ToolboxItemDto>> GetToolboxItem(Guid itemId)
+  {
+    return await TryCallApi(async () =>
+      await _client.GetFromJsonAsync<ToolboxItemDto>($"{HttpConstants.ToolboxEndpoint}/{itemId}"));
+  }
+
+  public async Task<Result<ToolboxItemDto[]>> GetToolboxItems()
+  {
+    return await TryCallApi(async () =>
+      await _client.GetFromJsonAsync<ToolboxItemDto[]>(HttpConstants.ToolboxEndpoint));
+  }
+
   public async Task<Result<GetSubdirectoriesResponseDto>> GetSubdirectories(Guid deviceId, string directoryPath)
   {
     return await TryCallApi(async () =>
@@ -828,6 +1120,17 @@ public class ControlrApi(
     return await TryCallApi(async () =>
     {
       using var response = await _client.PostAsJsonAsync(HttpConstants.LogoutEndpoint, new { });
+      response.EnsureSuccessStatusCode();
+    });
+  }
+
+  public async Task<Result> MoveFile(Guid deviceId, string sourcePath, string destinationPath)
+  {
+    return await TryCallApi(async () =>
+    {
+      var requestDto = new MoveFileRequestDto(deviceId, sourcePath, destinationPath);
+      using var response = await _client.PostAsJsonAsync(
+        $"{HttpConstants.DeviceFileSystemEndpoint}/move-file/{deviceId}", requestDto);
       response.EnsureSuccessStatusCode();
     });
   }
@@ -924,6 +1227,26 @@ public class ControlrApi(
     return await TryCallApi(() => _client.PostAsync(HttpConstants.TestEmailEndpoint, null));
   }
 
+  public async Task<Result<SessionRecordingDto>> StartRecording(StartRecordingRequestDto request)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.PostAsJsonAsync($"{HttpConstants.SessionRecordingsEndpoint}/start", request);
+      response.EnsureSuccessStatusCode();
+      return await response.Content.ReadFromJsonAsync<SessionRecordingDto>();
+    });
+  }
+
+  public async Task<Result<SessionRecordingDto>> StopRecording(Guid recordingId)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.PostAsync($"{HttpConstants.SessionRecordingsEndpoint}/{recordingId}/stop", null);
+      response.EnsureSuccessStatusCode();
+      return await response.Content.ReadFromJsonAsync<SessionRecordingDto>();
+    });
+  }
+
   public async Task<Result<TenantSettingResponseDto>> SetTenantSetting(string settingName, string settingValue)
   {
     return await TryCallApi(async () =>
@@ -946,11 +1269,94 @@ public class ControlrApi(
     });
   }
 
+  public async Task<Result> ReloadPlugins()
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.PostAsync($"{HttpConstants.PluginsEndpoint}/reload", null);
+      response.EnsureSuccessStatusCode();
+    });
+  }
+
   public async Task<Result> TestWebhook(Guid webhookId)
   {
     return await TryCallApi(async () =>
     {
       using var response = await _client.PostAsync($"{HttpConstants.WebhooksEndpoint}/{webhookId}/test", null);
+      response.EnsureSuccessStatusCode();
+    });
+  }
+
+  public async Task<Result<TicketingIntegrationDto[]>> GetAllTicketingIntegrations()
+  {
+    return await TryCallApi(async () =>
+      await _client.GetFromJsonAsync<TicketingIntegrationDto[]>(
+        $"{HttpConstants.TicketingEndpoint}/integrations"));
+  }
+
+  public async Task<Result<TicketingIntegrationDto>> CreateTicketingIntegration(CreateTicketingIntegrationDto request)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.PostAsJsonAsync(
+        $"{HttpConstants.TicketingEndpoint}/integrations", request);
+      response.EnsureSuccessStatusCode();
+      return await response.Content.ReadFromJsonAsync<TicketingIntegrationDto>();
+    });
+  }
+
+  public async Task<Result<TicketingIntegrationDto>> UpdateTicketingIntegration(Guid id, UpdateTicketingIntegrationDto request)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.PutAsJsonAsync(
+        $"{HttpConstants.TicketingEndpoint}/integrations/{id}", request);
+      response.EnsureSuccessStatusCode();
+      return await response.Content.ReadFromJsonAsync<TicketingIntegrationDto>();
+    });
+  }
+
+  public async Task<Result> DeleteTicketingIntegration(Guid id)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.DeleteAsync(
+        $"{HttpConstants.TicketingEndpoint}/integrations/{id}");
+      response.EnsureSuccessStatusCode();
+    });
+  }
+
+  public async Task<Result<TicketLinkDto>> CreateTicket(CreateTicketRequestDto request)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.PostAsJsonAsync(
+        $"{HttpConstants.TicketingEndpoint}/tickets", request);
+      response.EnsureSuccessStatusCode();
+      return await response.Content.ReadFromJsonAsync<TicketLinkDto>();
+    });
+  }
+
+  public async Task<Result<TicketLinkDto[]>> GetTicketLinks(Guid? deviceId = null, Guid? sessionId = null, Guid? alertId = null)
+  {
+    return await TryCallApi(async () =>
+    {
+      var queryParams = new List<string>();
+      if (deviceId.HasValue) queryParams.Add($"deviceId={deviceId.Value}");
+      if (sessionId.HasValue) queryParams.Add($"sessionId={sessionId.Value}");
+      if (alertId.HasValue) queryParams.Add($"alertId={alertId.Value}");
+      var query = queryParams.Count > 0 ? "?" + string.Join("&", queryParams) : "";
+      return await _client.GetFromJsonAsync<TicketLinkDto[]>(
+        $"{HttpConstants.TicketingEndpoint}/tickets{query}");
+    });
+  }
+
+  public async Task<Result> DeleteTicketLink(Guid id)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.DeleteAsync(
+        $"{HttpConstants.TicketingEndpoint}/tickets/{id}");
       response.EnsureSuccessStatusCode();
     });
   }
@@ -1025,6 +1431,52 @@ public class ControlrApi(
     });
   }
 
+  public async Task<Result<PluginRegistrationDto>> UpdatePlugin(UpdatePluginRequestDto request)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.PutAsJsonAsync(HttpConstants.PluginsEndpoint, request);
+      response.EnsureSuccessStatusCode();
+      return await response.Content.ReadFromJsonAsync<PluginRegistrationDto>();
+    });
+  }
+
+  public async Task<Result<ToolboxItemDto>> UpdateToolboxItem(ToolboxItemUpdateRequestDto request)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.PutAsJsonAsync($"{HttpConstants.ToolboxEndpoint}/{request.Id}", request);
+      response.EnsureSuccessStatusCode();
+      return await response.Content.ReadFromJsonAsync<ToolboxItemDto>();
+    });
+  }
+
+  public async Task<Result> UploadRecordingFrame(Guid recordingId, byte[] jpegData, long timestampMs)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var content = new MultipartFormDataContent();
+      content.Add(new ByteArrayContent(jpegData), "file", "frame.jpg");
+      content.Add(new StringContent(timestampMs.ToString()), "timestampMs");
+      using var response = await _client.PostAsync(
+        $"{HttpConstants.SessionRecordingsEndpoint}/{recordingId}/frame", content);
+      response.EnsureSuccessStatusCode();
+    });
+  }
+
+  public async Task<Result<ToolboxItemDto>> UploadToolboxItem(ToolboxItemCreateRequestDto metadata, Stream fileStream, string fileName)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var content = new MultipartFormDataContent();
+      content.Add(new StreamContent(fileStream), "file", fileName);
+      content.Add(new StringContent(JsonSerializer.Serialize(metadata), System.Text.Encoding.UTF8, "application/json"), "metadata");
+      using var response = await _client.PostAsync(HttpConstants.ToolboxEndpoint, content);
+      response.EnsureSuccessStatusCode();
+      return await response.Content.ReadFromJsonAsync<ToolboxItemDto>();
+    });
+  }
+
   public async Task<Result<WebhookSubscriptionDto>> UpdateWebhook(WebhookUpdateRequestDto request)
   {
     return await TryCallApi(async () =>
@@ -1044,6 +1496,62 @@ public class ControlrApi(
       response.EnsureSuccessStatusCode();
       return await response.Content.ReadFromJsonAsync<ValidateFilePathResponseDto>() ??
         new ValidateFilePathResponseDto(false, "Failed to deserialize response");
+    });
+  }
+
+  public async Task<Result<AutomationSuggestionDto[]>> GetSuggestions(string? status = null, int count = 50)
+  {
+    return await TryCallApi(async () =>
+    {
+      var url = $"{HttpConstants.SuggestionsEndpoint}?count={count}";
+      if (!string.IsNullOrWhiteSpace(status))
+      {
+        url += $"&status={status}";
+      }
+      return await _client.GetFromJsonAsync<AutomationSuggestionDto[]>(url);
+    });
+  }
+
+  public async Task<Result<AutomationSuggestionDto>> UpdateSuggestion(Guid suggestionId, AutomationSuggestionUpdateRequestDto request)
+  {
+    return await TryCallApi(async () =>
+    {
+      using var response = await _client.PutAsJsonAsync($"{HttpConstants.SuggestionsEndpoint}/{suggestionId}", request);
+      response.EnsureSuccessStatusCode();
+      return await response.Content.ReadFromJsonAsync<AutomationSuggestionDto>();
+    });
+  }
+
+  public async Task<Result<PendingPatchDto[]>> GetPendingPatches(Guid? deviceId = null)
+  {
+    return await TryCallApi(async () =>
+    {
+      var url = $"{HttpConstants.PatchManagementEndpoint}/pending";
+      if (deviceId is not null)
+      {
+        url += $"?deviceId={deviceId}";
+      }
+      return await _client.GetFromJsonAsync<PendingPatchDto[]>(url);
+    });
+  }
+
+  public async Task<Result<PendingPatchDto[]>> GetDevicePendingPatches(Guid deviceId)
+  {
+    return await TryCallApi(async () =>
+      await _client.GetFromJsonAsync<PendingPatchDto[]>(
+        $"{HttpConstants.PatchManagementEndpoint}/pending/{deviceId}"));
+  }
+
+  public async Task<Result<PatchInstallationDto[]>> GetPatchInstallations(Guid? deviceId = null, int count = 50)
+  {
+    return await TryCallApi(async () =>
+    {
+      var url = $"{HttpConstants.PatchManagementEndpoint}/installations?count={count}";
+      if (deviceId is not null)
+      {
+        url += $"&deviceId={deviceId}";
+      }
+      return await _client.GetFromJsonAsync<PatchInstallationDto[]>(url);
     });
   }
 

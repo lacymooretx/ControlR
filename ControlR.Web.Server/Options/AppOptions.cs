@@ -7,6 +7,7 @@ public class AppOptions
   public const string SectionKey = "AppOptions";
 
   public bool AllowAgentsToSelfBootstrap { get; init; }
+  public string BrandingStoragePath { get; init; } = "./data/branding";
   public string? AuthenticatorIssuerName { get; init; }
   public bool DisableEmailSending { get; init; }
   public string? DockerGatewayIp { get; init; }
@@ -29,7 +30,9 @@ public class AppOptions
   [ProtectedDataClassification]
   public string? MicrosoftClientSecret { get; init; }
   public bool PersistPasskeyLogin { get; init; }
+  public string RecordingsStoragePath { get; init; } = "./data/recordings";
   public bool RequireUserEmailConfirmation { get; init; }
+  public string ToolboxStoragePath { get; init; } = "./data/toolbox";
   public bool SmtpCheckCertificateRevocation { get; init; } = true;
   public string? SmtpDisplayName { get; init; }
   public string? SmtpEmail { get; init; }

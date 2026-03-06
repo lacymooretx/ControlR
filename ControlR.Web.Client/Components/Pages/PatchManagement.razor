@@ -1,0 +1,229 @@
+@page "/patch-management"
+@rendermode InteractiveWebAssembly
+@attribute [Authorize(Roles = RoleNames.TenantAdministrator)]
+@inject ILazyInjector<IControlrApi> ControlrApi
+@inject ISnackbar Snackbar
+@inject IHubConnection<IViewerHub> MainHub
+
+<MudText Typo="Typo.h4" Color="Color.Primary" GutterBottom>
+  Patch Management
+</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+  <MudStack Row AlignItems="AlignItems.Center">
+    <MudText Typo="Typo.body1">
+      Scan for and install available Windows updates on managed devices.
+    </MudText>
+    <MudSpacer />
+    <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Info"
+      OnClick="RefreshData" />
+  </MudStack>
+</MudPaper>
+
+@if (_loading)
+{
+  <MudProgressLinear Indeterminate Color="Color.Primary" />
+}
+else
+{
+  <MudTabs Elevation="2" Rounded ApplyEffectsToContainer Class="mb-4">
+    <MudTabPanel Text="Pending Patches">
+      @if (_pendingPatches.Count == 0)
+      {
+        <MudAlert Severity="Severity.Success" Class="ma-4">
+          No pending patches. Run a scan to check for available updates.
+        </MudAlert>
+      }
+      else
+      {
+        <MudPaper Class="pa-4">
+          <MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
+            <MudText Typo="Typo.h6">
+              @_pendingPatches.Count Available Update(s)
+            </MudText>
+            <MudSpacer />
+            @if (_selectedPatches.Count > 0)
+            {
+              <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                StartIcon="@Icons.Material.Filled.InstallDesktop"
+                OnClick="InstallSelectedPatches"
+                Disabled="_installing">
+                @if (_installing)
+                {
+                  <MudProgressCircular Size="Size.Small" Indeterminate Class="mr-2" />
+                }
+                Install Selected (@_selectedPatches.Count)
+              </MudButton>
+            }
+          </MudStack>
+          <MudDataGrid T="PendingPatchDto" Items="_pendingPatches" SortMode="SortMode.Single"
+            Filterable="false" Hideable="false" MultiSelection
+            SelectedItems="_selectedPatches" SelectedItemsChanged="OnSelectedPatchesChanged">
+            <Columns>
+              <SelectColumn T="PendingPatchDto" />
+              <TemplateColumn T="PendingPatchDto" Title="Severity" Sortable="false">
+                <CellTemplate>
+                  @if (context.Item.IsCritical)
+                  {
+                    <MudChip T="string" Color="Color.Error" Size="Size.Small">Critical</MudChip>
+                  }
+                  else if (context.Item.IsImportant)
+                  {
+                    <MudChip T="string" Color="Color.Warning" Size="Size.Small">Important</MudChip>
+                  }
+                  else
+                  {
+                    <MudChip T="string" Color="Color.Default" Size="Size.Small">Optional</MudChip>
+                  }
+                </CellTemplate>
+              </TemplateColumn>
+              <PropertyColumn Property="x => x.Title" Title="Title" />
+              <PropertyColumn Property="x => x.DeviceId" Title="Device" />
+              <TemplateColumn T="PendingPatchDto" Title="Size" Sortable="true" SortBy="x => x.SizeBytes">
+                <CellTemplate>
+                  @FormatSize(context.Item.SizeBytes)
+                </CellTemplate>
+              </TemplateColumn>
+              <TemplateColumn T="PendingPatchDto" Title="Detected" Sortable="true" SortBy="x => x.DetectedAt">
+                <CellTemplate>
+                  @context.Item.DetectedAt.LocalDateTime.ToString("g")
+                </CellTemplate>
+              </TemplateColumn>
+            </Columns>
+          </MudDataGrid>
+        </MudPaper>
+      }
+    </MudTabPanel>
+    <MudTabPanel Text="Installation History">
+      @if (_installations.Count == 0)
+      {
+        <MudAlert Severity="Severity.Info" Class="ma-4">
+          No installation history yet.
+        </MudAlert>
+      }
+      else
+      {
+        <MudDataGrid T="PatchInstallationDto" Items="_installations" SortMode="SortMode.Single"
+          Filterable="false" Hideable="false" Class="pa-4">
+          <Columns>
+            <TemplateColumn T="PatchInstallationDto" Title="Status" Sortable="false">
+              <CellTemplate>
+                @{
+                  var color = context.Item.Status switch
+                  {
+                    "Completed" => Color.Success,
+                    "CompletedWithErrors" => Color.Warning,
+                    "InProgress" => Color.Info,
+                    "Failed" => Color.Error,
+                    _ => Color.Default,
+                  };
+                }
+                <MudChip T="string" Color="@color" Size="Size.Small">
+                  @context.Item.Status
+                </MudChip>
+              </CellTemplate>
+            </TemplateColumn>
+            <PropertyColumn Property="x => x.DeviceId" Title="Device" />
+            <PropertyColumn Property="x => x.TotalCount" Title="Total" />
+            <PropertyColumn Property="x => x.InstalledCount" Title="Installed" />
+            <PropertyColumn Property="x => x.FailedCount" Title="Failed" />
+            <TemplateColumn T="PatchInstallationDto" Title="Initiated" Sortable="true" SortBy="x => x.InitiatedAt">
+              <CellTemplate>
+                @context.Item.InitiatedAt.LocalDateTime.ToString("g")
+              </CellTemplate>
+            </TemplateColumn>
+            <TemplateColumn T="PatchInstallationDto" Title="Completed" Sortable="true" SortBy="x => x.CompletedAt">
+              <CellTemplate>
+                @(context.Item.CompletedAt?.LocalDateTime.ToString("g") ?? "In Progress")
+              </CellTemplate>
+            </TemplateColumn>
+          </Columns>
+        </MudDataGrid>
+      }
+    </MudTabPanel>
+  </MudTabs>
+}
+
+@code {
+  private bool _loading = true;
+  private bool _installing;
+  private List<PendingPatchDto> _pendingPatches = [];
+  private HashSet<PendingPatchDto> _selectedPatches = [];
+  private List<PatchInstallationDto> _installations = [];
+
+  protected override async Task OnInitializedAsync()
+  {
+    await RefreshData();
+  }
+
+  private async Task RefreshData()
+  {
+    _loading = true;
+    StateHasChanged();
+
+    var patchResult = await ControlrApi.Value.GetPendingPatches();
+    if (patchResult.IsSuccess)
+    {
+      _pendingPatches = patchResult.Value.ToList();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to load patches: {patchResult.Reason}", Severity.Error);
+    }
+
+    var installResult = await ControlrApi.Value.GetPatchInstallations();
+    if (installResult.IsSuccess)
+    {
+      _installations = installResult.Value.ToList();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to load installations: {installResult.Reason}", Severity.Error);
+    }
+
+    _loading = false;
+  }
+
+  private void OnSelectedPatchesChanged(HashSet<PendingPatchDto> selected)
+  {
+    _selectedPatches = selected;
+  }
+
+  private async Task InstallSelectedPatches()
+  {
+    if (_selectedPatches.Count == 0) return;
+
+    _installing = true;
+    StateHasChanged();
+
+    // Group by device
+    var byDevice = _selectedPatches.GroupBy(p => p.DeviceId);
+
+    foreach (var group in byDevice)
+    {
+      var updateIds = group.Select(p => p.UpdateId).ToArray();
+      var result = await MainHub.Server.RequestPatchInstall(group.Key, updateIds);
+      if (result.IsSuccess)
+      {
+        Snackbar.Add($"Patch install initiated for device ({updateIds.Length} patches).", Severity.Success);
+      }
+      else
+      {
+        Snackbar.Add($"Failed to initiate patch install: {result.Reason}", Severity.Error);
+      }
+    }
+
+    _installing = false;
+    _selectedPatches.Clear();
+    await RefreshData();
+  }
+
+  private static string FormatSize(long bytes)
+  {
+    if (bytes <= 0) return "Unknown";
+    if (bytes < 1024) return $"{bytes} B";
+    if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+    if (bytes < 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024):F1} MB";
+    return $"{bytes / (1024.0 * 1024 * 1024):F1} GB";
+  }
+}

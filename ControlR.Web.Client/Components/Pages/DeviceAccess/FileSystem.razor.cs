@@ -11,7 +11,10 @@ namespace ControlR.Web.Client.Components.Pages.DeviceAccess;
 
 public partial class FileSystem : JsInteropableComponent
 {
+  private DotNetObjectReference<FileSystem>? _componentRef;
+  private ElementReference _dropZoneRef;
   private InputFile _fileInputRef = null!;
+  private bool _isDragOver;
   private string _searchText = string.Empty;
   private string? _selectedPath;
 
@@ -68,6 +71,59 @@ public partial class FileSystem : JsInteropableComponent
     await base.OnInitializedAsync();
 
     await LoadRootDrives();
+  }
+
+  protected override async Task OnAfterRenderAsync(bool firstRender)
+  {
+    await base.OnAfterRenderAsync(firstRender);
+
+    if (firstRender)
+    {
+      await WaitForJsModule();
+      _componentRef = DotNetObjectReference.Create(this);
+      await JsModule.InvokeVoidAsync("initDropZone", _dropZoneRef, _componentRef);
+    }
+  }
+
+  [JSInvokable]
+  public void OnDragEnterFromJs()
+  {
+    if (string.IsNullOrEmpty(SelectedPath))
+    {
+      return;
+    }
+
+    _isDragOver = true;
+    InvokeAsync(StateHasChanged);
+  }
+
+  [JSInvokable]
+  public void OnDragLeaveFromJs()
+  {
+    _isDragOver = false;
+    InvokeAsync(StateHasChanged);
+  }
+
+  protected override async ValueTask DisposeAsync(bool disposing)
+  {
+    if (disposing)
+    {
+      try
+      {
+        if (IsJsModuleReady)
+        {
+          await JsModule.InvokeVoidAsync("disposeDropZone");
+        }
+      }
+      catch
+      {
+        // JS interop may fail during disposal
+      }
+
+      _componentRef?.Dispose();
+    }
+
+    await base.DisposeAsync(disposing);
   }
 
   private static string CombinePaths(string path1, string path2, string pathSeparator)
@@ -596,6 +652,48 @@ public partial class FileSystem : JsInteropableComponent
       StateHasChanged();
     }
   }
+  private async Task OnMoveFileClick()
+  {
+    if (SelectedItems.Count != 1)
+    {
+      Snackbar.Add("Please select exactly one item to move", Severity.Warning);
+      return;
+    }
+
+    var item = SelectedItems.First();
+
+    var destinationPath = await DialogService.ShowPrompt(
+      "Move Item",
+      $"Enter the full destination path for '{item.Name}':",
+      "Destination Path",
+      item.FullPath);
+
+    if (string.IsNullOrWhiteSpace(destinationPath))
+    {
+      return;
+    }
+
+    try
+    {
+      var result = await ControlrApi.MoveFile(DeviceId, item.FullPath, destinationPath);
+      if (result.IsSuccess)
+      {
+        Snackbar.Add($"Successfully moved '{item.Name}'", Severity.Success);
+        SelectedItems.Clear();
+        await LoadDirectoryContents(SelectedPath!);
+      }
+      else
+      {
+        Snackbar.Add($"Failed to move '{item.Name}': {result.Reason}", Severity.Error);
+      }
+    }
+    catch (Exception ex)
+    {
+      Logger.LogError(ex, "Error moving {ItemName}", item.Name);
+      Snackbar.Add($"An error occurred while moving '{item.Name}'", Severity.Error);
+    }
+  }
+
   private async Task OnRefreshClick()
   {
     if (string.IsNullOrEmpty(SelectedPath))

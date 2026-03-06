@@ -16,6 +16,8 @@ public abstract class BaseLayout : LayoutComponentBase, IAsyncDisposable
   [Inject]
   public required ILogger<BaseLayout> BaseLogger { get; set; }
   [Inject]
+  public required IBrandingState BrandingState { get; set; }
+  [Inject]
   public required ILazyInjector<IJsInterop> JsInterop { get; set; }
   [Inject]
   public required ILazyInjector<IMessenger> Messenger { get; set; }
@@ -30,12 +32,99 @@ public abstract class BaseLayout : LayoutComponentBase, IAsyncDisposable
       ? CustomTheme.PaletteDark
       : CustomTheme.PaletteLight;
   protected ThemeMode CurrentThemeMode { get; set; } = ThemeMode.Auto;
-  protected MudTheme CustomTheme =>
-      _customTheme ??= new MudTheme
+  protected MudTheme CustomTheme
+  {
+    get
+    {
+      if (_customTheme is null || _brandingApplied != BrandingState.IsLoaded)
       {
-        PaletteDark = Theme.DarkPalette,
-        PaletteLight = Theme.LightPalette
-      };
+        _customTheme = BuildTheme();
+        _brandingApplied = BrandingState.IsLoaded;
+      }
+      return _customTheme;
+    }
+  }
+
+  private bool _brandingApplied;
+
+  private MudTheme BuildTheme()
+  {
+    var darkPalette = new PaletteDark
+    {
+      Primary = BrandingState.IsLoaded ? BrandingState.PrimaryColor : Theme.DarkPalette.Primary,
+      Secondary = BrandingState.IsLoaded && !string.IsNullOrEmpty(BrandingState.SecondaryColor)
+        ? BrandingState.SecondaryColor
+        : Theme.DarkPalette.Secondary,
+      Tertiary = Theme.DarkPalette.Tertiary,
+      Info = Theme.DarkPalette.Info,
+      Success = Theme.DarkPalette.Success,
+      Warning = Theme.DarkPalette.Warning,
+      Error = Theme.DarkPalette.Error,
+      Dark = Theme.DarkPalette.Dark,
+      TextPrimary = Theme.DarkPalette.TextPrimary,
+      TextSecondary = Theme.DarkPalette.TextSecondary,
+      TextDisabled = Theme.DarkPalette.TextDisabled,
+      ActionDefault = Theme.DarkPalette.ActionDefault,
+      ActionDisabled = Theme.DarkPalette.ActionDisabled,
+      Background = Theme.DarkPalette.Background,
+      BackgroundGray = Theme.DarkPalette.BackgroundGray,
+      Surface = Theme.DarkPalette.Surface,
+      AppbarBackground = Theme.DarkPalette.AppbarBackground,
+      AppbarText = Theme.DarkPalette.AppbarText,
+      DrawerBackground = Theme.DarkPalette.DrawerBackground,
+      DrawerText = Theme.DarkPalette.DrawerText,
+      Divider = Theme.DarkPalette.Divider,
+      DividerLight = Theme.DarkPalette.DividerLight,
+      TableLines = Theme.DarkPalette.TableLines,
+      TableStriped = Theme.DarkPalette.TableStriped,
+      TableHover = Theme.DarkPalette.TableHover,
+      LinesDefault = Theme.DarkPalette.LinesDefault,
+      LinesInputs = Theme.DarkPalette.LinesInputs,
+      OverlayDark = Theme.DarkPalette.OverlayDark,
+      OverlayLight = Theme.DarkPalette.OverlayLight
+    };
+
+    var lightPalette = new PaletteLight
+    {
+      Primary = BrandingState.IsLoaded ? BrandingState.PrimaryColor : Theme.LightPalette.Primary,
+      Secondary = BrandingState.IsLoaded && !string.IsNullOrEmpty(BrandingState.SecondaryColor)
+        ? BrandingState.SecondaryColor
+        : Theme.LightPalette.Secondary,
+      Tertiary = Theme.LightPalette.Tertiary,
+      Info = Theme.LightPalette.Info,
+      Success = Theme.LightPalette.Success,
+      Warning = Theme.LightPalette.Warning,
+      Error = Theme.LightPalette.Error,
+      Dark = Theme.LightPalette.Dark,
+      TextPrimary = Theme.LightPalette.TextPrimary,
+      TextSecondary = Theme.LightPalette.TextSecondary,
+      TextDisabled = Theme.LightPalette.TextDisabled,
+      ActionDefault = Theme.LightPalette.ActionDefault,
+      ActionDisabled = Theme.LightPalette.ActionDisabled,
+      Background = Theme.LightPalette.Background,
+      BackgroundGray = Theme.LightPalette.BackgroundGray,
+      Surface = Theme.LightPalette.Surface,
+      AppbarBackground = Theme.LightPalette.AppbarBackground,
+      AppbarText = Theme.LightPalette.AppbarText,
+      DrawerBackground = Theme.LightPalette.DrawerBackground,
+      DrawerText = Theme.LightPalette.DrawerText,
+      Divider = Theme.LightPalette.Divider,
+      DividerLight = Theme.LightPalette.DividerLight,
+      TableLines = Theme.LightPalette.TableLines,
+      TableStriped = Theme.LightPalette.TableStriped,
+      TableHover = Theme.LightPalette.TableHover,
+      LinesDefault = Theme.LightPalette.LinesDefault,
+      LinesInputs = Theme.LightPalette.LinesInputs,
+      OverlayDark = Theme.LightPalette.OverlayDark,
+      OverlayLight = Theme.LightPalette.OverlayLight
+    };
+
+    return new MudTheme
+    {
+      PaletteDark = darkPalette,
+      PaletteLight = lightPalette
+    };
+  }
   protected bool DrawerOpen { get; set; } = true;
   protected bool IsAuthenticated { get; set; }
   protected bool IsDarkMode { get; set; } = true;
@@ -86,6 +175,8 @@ public abstract class BaseLayout : LayoutComponentBase, IAsyncDisposable
   protected override async Task OnInitializedAsync()
   {
     await base.OnInitializedAsync();
+
+    await BrandingState.LoadAsync();
 
     var authState = await AuthState.GetAuthenticationStateAsync();
     IsAuthenticated = authState.User.Identity?.IsAuthenticated ?? false;

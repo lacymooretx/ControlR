@@ -77,6 +77,77 @@ public class DeviceFileSystemController : ControllerBase
     }
   }
 
+  [HttpPost("move-file/{deviceId:guid}")]
+  public async Task<IActionResult> MoveFile(
+    [FromRoute] Guid deviceId,
+    [FromBody] MoveFileRequestDto request,
+    [FromServices] AppDb appDb,
+    [FromServices] IHubContext<AgentHub, IAgentHubClient> agentHub,
+    [FromServices] IAuthorizationService authorizationService,
+    [FromServices] ILogger<DeviceFileSystemController> logger,
+    CancellationToken cancellationToken)
+  {
+    if (string.IsNullOrWhiteSpace(request.SourcePath) || string.IsNullOrWhiteSpace(request.DestinationPath))
+    {
+      return BadRequest("Source path and destination path are required.");
+    }
+
+    var device = await appDb.Devices
+      .AsNoTracking()
+      .FirstOrDefaultAsync(x => x.Id == deviceId, cancellationToken);
+
+    if (device is null)
+    {
+      logger.LogWarning("Device {DeviceId} not found.", deviceId);
+      return NotFound();
+    }
+
+    var authResult = await authorizationService.AuthorizeAsync(
+      User,
+      device,
+      DeviceAccessByDeviceResourcePolicy.PolicyName);
+
+    if (!authResult.Succeeded)
+    {
+      logger.LogCritical("Authorization failed for user {UserName} on device {DeviceId}.",
+        User.Identity?.Name, deviceId);
+      return Forbid();
+    }
+
+    if (string.IsNullOrWhiteSpace(device.ConnectionId))
+    {
+      logger.LogWarning("Device {DeviceId} is not connected (no ConnectionId).", deviceId);
+      return BadRequest("Device is not currently connected.");
+    }
+
+    var moveRequest = new MoveFileHubDto(request.SourcePath, request.DestinationPath);
+
+    try
+    {
+      var result = await agentHub.Clients
+        .Client(device.ConnectionId)
+        .MoveFile(moveRequest);
+
+      if (!result.IsSuccess)
+      {
+        logger.LogWarning("Move file request failed for {SourcePath} -> {DestinationPath} on device {DeviceId}: {Reason}",
+          request.SourcePath, request.DestinationPath, deviceId, result.Reason);
+        return BadRequest(result.Reason);
+      }
+
+      logger.LogInformation("File move requested for {SourcePath} -> {DestinationPath} on device {DeviceId}",
+        request.SourcePath, request.DestinationPath, deviceId);
+
+      return Ok(new { Message = "File move completed", request.SourcePath, request.DestinationPath });
+    }
+    catch (Exception ex)
+    {
+      logger.LogError(ex, "Error moving file {SourcePath} -> {DestinationPath} on device {DeviceId}",
+        request.SourcePath, request.DestinationPath, deviceId);
+      return StatusCode(500, "An error occurred during file move.");
+    }
+  }
+
   [HttpDelete("delete/{deviceId:guid}")]
   public async Task<IActionResult> DeleteFile(
     [FromRoute] Guid deviceId,

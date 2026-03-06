@@ -1,0 +1,123 @@
+@inject ILazyInjector<IControlrApi> ControlrApi
+@inject ISnackbar Snackbar
+
+<MudDialog>
+  <DialogContent>
+    <MudForm @ref="_form">
+      <MudTextField @bind-Value="_name" Label="Name" Required RequiredError="Name is required"
+        Class="mb-3" />
+      <MudTextField @bind-Value="_description" Label="Description" Lines="2" Class="mb-3" />
+      <MudTextField @bind-Value="_category" Label="Category" Class="mb-3" />
+      <MudTextField @bind-Value="_version" Label="Version" Class="mb-3" />
+      <MudFileUpload T="IBrowserFile" Accept="*/*" FilesChanged="OnFileSelected" Class="mb-3">
+        <ActivatorContent>
+          <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+            StartIcon="@Icons.Material.Filled.AttachFile">
+            @(_selectedFile is not null ? _selectedFile.Name : "Select File")
+          </MudButton>
+        </ActivatorContent>
+      </MudFileUpload>
+      @if (_selectedFile is not null)
+      {
+        <MudText Typo="Typo.body2" Class="mb-3">
+          Selected: @_selectedFile.Name (@FormatSize(_selectedFile.Size))
+        </MudText>
+      }
+      @if (_uploading)
+      {
+        <MudProgressLinear Indeterminate Color="Color.Primary" Class="mb-3" />
+      }
+    </MudForm>
+  </DialogContent>
+  <DialogActions>
+    <MudButton OnClick="Cancel">Cancel</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Upload"
+      Disabled="_uploading || _selectedFile is null">
+      @if (_uploading)
+      {
+        <MudProgressCircular Indeterminate Size="Size.Small" Class="mr-2" />
+      }
+      Upload
+    </MudButton>
+  </DialogActions>
+</MudDialog>
+
+@code {
+  [CascadingParameter]
+  private IMudDialogInstance MudDialog { get; set; } = null!;
+
+  private MudForm _form = null!;
+  private string _name = string.Empty;
+  private string _description = string.Empty;
+  private string _category = string.Empty;
+  private string _version = string.Empty;
+  private IBrowserFile? _selectedFile;
+  private bool _uploading;
+
+  private void OnFileSelected(IBrowserFile? file)
+  {
+    _selectedFile = file;
+    if (file is not null && string.IsNullOrWhiteSpace(_name))
+    {
+      _name = Path.GetFileNameWithoutExtension(file.Name);
+    }
+  }
+
+  private void Cancel() => MudDialog.Cancel();
+
+  private async Task Upload()
+  {
+    await _form.Validate();
+    if (!_form.IsValid || _selectedFile is null)
+    {
+      return;
+    }
+
+    _uploading = true;
+
+    try
+    {
+      var metadata = new ToolboxItemCreateRequestDto(
+        _name,
+        string.IsNullOrWhiteSpace(_description) ? null : _description,
+        string.IsNullOrWhiteSpace(_category) ? null : _category,
+        string.IsNullOrWhiteSpace(_version) ? null : _version);
+
+      await using var stream = _selectedFile.OpenReadStream(maxAllowedSize: 500L * 1024 * 1024);
+
+      var result = await ControlrApi.Value.UploadToolboxItem(metadata, stream, _selectedFile.Name);
+      if (!result.IsSuccess)
+      {
+        Snackbar.Add($"Upload failed: {result.Reason}", Severity.Error);
+        _uploading = false;
+        return;
+      }
+
+      Snackbar.Add("Tool uploaded successfully.", Severity.Success);
+      MudDialog.Close(DialogResult.Ok(true));
+    }
+    catch (Exception ex)
+    {
+      Snackbar.Add($"Upload failed: {ex.Message}", Severity.Error);
+    }
+
+    _uploading = false;
+  }
+
+  private static string FormatSize(long bytes)
+  {
+    if (bytes >= 1_073_741_824)
+    {
+      return $"{bytes / 1_073_741_824.0:F1} GB";
+    }
+    if (bytes >= 1_048_576)
+    {
+      return $"{bytes / 1_048_576.0:F1} MB";
+    }
+    if (bytes >= 1024)
+    {
+      return $"{bytes / 1024.0:F1} KB";
+    }
+    return $"{bytes} B";
+  }
+}

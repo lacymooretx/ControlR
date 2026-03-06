@@ -86,19 +86,25 @@
 
   </div>
 
-  @if (DeviceState.TryGetCurrentDevice()?.Platform == SystemPlatform.Windows)
-  {
+  <div>
+    <MudText Typo="Typo.caption" Class="mb-2">Backstage Mode</MudText>
     <div>
-      <MudText Typo="Typo.caption" Class="mb-2">Privacy</MudText>
-      <div>
-        <MudTooltip Text="Black out the physical display while remote control remains visible">
-          <MudSwitch Value="RemoteControlState.IsPrivacyScreenEnabled"
-            ValueChanged="@((bool v) => HandlePrivacyScreenToggled(v))" Color="Color.Secondary" Label="Privacy Screen"
-            ThumbIcon="@(Icons.Material.Filled.VisibilityOff)" />
-        </MudTooltip>
-      </div>
+      @{
+        var platform = DeviceState.TryGetCurrentDevice()?.Platform;
+        var privacyTooltip = platform switch
+        {
+          SystemPlatform.Windows => "Creates a black overlay on the remote display. The remote user cannot see your activity, but screen capture continues normally.",
+          SystemPlatform.MacOs => "Puts the remote display to sleep using DPMS. The remote user's screen goes dark.",
+          _ => "Turns off the remote display using DPMS power management. Limited support on Wayland."
+        };
+      }
+      <MudTooltip Text="@privacyTooltip">
+        <MudSwitch Value="RemoteControlState.IsPrivacyScreenEnabled"
+          ValueChanged="@((bool v) => HandlePrivacyScreenToggled(v))" Color="Color.Secondary" Label="Privacy Screen"
+          ThumbIcon="@(Icons.Material.Filled.VisibilityOff)" />
+      </MudTooltip>
     </div>
-  }
+  </div>
 
 </div>
 

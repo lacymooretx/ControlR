@@ -24,9 +24,16 @@
 																		Edge="Edge.Start" />
 				}
 
-				<MudImage Src=@Assets["appicon-192.png"] Height="30" Class="mx-2" />
+				@if (!string.IsNullOrEmpty(BrandingState.LogoUrl))
+				{
+					<MudImage Src="@BrandingState.LogoUrl" Height="30" Class="mx-2" />
+				}
+				else
+				{
+					<MudImage Src=@Assets["appicon-192.png"] Height="30" Class="mx-2" />
+				}
 				<MudLink Href="/" Underline="Underline.None">
-					<MudText Typo="Typo.h6" Color="Color.Primary">ControlR</MudText>
+					<MudText Typo="Typo.h6" Color="Color.Primary">@BrandingState.ProductName</MudText>
 				</MudLink>
 
 				<MudSpacer />

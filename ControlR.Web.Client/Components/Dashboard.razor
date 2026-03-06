@@ -78,6 +78,17 @@
                   OnClick="@(() => RestartDevice(context.Item))">
                   Restart
                 </MudMenuItem>
+                @if (context.Item.Dto.Platform == SystemPlatform.Windows)
+                {
+                  <MudMenuItem Icon="@(Icons.Material.Filled.HealthAndSafety)" IconColor="Color.Warning"
+                    OnClick="@(() => RebootToSafeMode(context.Item))">
+                    Safe Mode Reboot
+                  </MudMenuItem>
+                  <MudMenuItem Icon="@(Icons.Material.Filled.AdminPanelSettings)" IconColor="Color.Info"
+                    OnClick="@(() => CreateJitAdmin(context.Item))">
+                    Create JIT Admin
+                  </MudMenuItem>
+                }
                 <MudMenuItem Icon="@(Icons.Material.Filled.DeleteForever)" IconColor="Color.Error"
                   OnClick="@(() => UninstallAgent(context.Item))">
                   Delete

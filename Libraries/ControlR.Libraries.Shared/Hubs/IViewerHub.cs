@@ -16,6 +16,9 @@ public interface IViewerHub
 
   Task<Result> CreatePtySession(Guid deviceId, Guid terminalSessionId, int cols, int rows);
 
+  Task<Result<CreateJitAdminResponseDto>> RequestCreateJitAdmin(Guid deviceId, int ttlMinutes = 60);
+  Task<Result> RequestDeleteJitAdmin(Guid deviceId, Guid jitAccountId);
+
   Task<Result> CreateTerminalSession(
     Guid deviceId,
     Guid terminalSessionId);
@@ -33,11 +36,14 @@ public interface IViewerHub
   Task SendDtoToAgent(Guid deviceId, DtoWrapper wrapper);
   Task SendDtoToUserGroups(DtoWrapper wrapper);
   Task SendPowerStateChange(Guid deviceId, PowerStateChangeType changeType);
+  Task<Result> RequestSafeModeReboot(Guid deviceId, bool withNetworking = true);
   Task<Result> SendPtyInput(Guid deviceId, PtyInputDto dto);
   Task<Result> SendTerminalInput(Guid deviceId, TerminalInputDto dto);
   Task SendWakeDevice(Guid deviceId, string[] macAddresses);
   Task<Result> ResizePty(Guid deviceId, PtyResizeDto dto);
   Task<Result> TestVncConnection(Guid guid, int port);
   Task UninstallAgent(Guid deviceId, string reason);
+  Task<Result> RequestPatchScan(Guid deviceId);
+  Task<Result> RequestPatchInstall(Guid deviceId, string[] updateIds);
   Task<Result> UploadFile(FileUploadMetadata metadata, ChannelReader<byte[]> fileStream);
 }

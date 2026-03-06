@@ -14,6 +14,8 @@ public partial class RemoteDisplay : JsInteropableComponent
   private ElementReference _canvasRef;
   private DotNetObjectReference<RemoteDisplay>? _componentRef;
   private ControlMode _controlMode = ControlMode.Mouse;
+  private bool _isAnnotationMode;
+  private bool _isAudioEnabled;
   private double _lastPinchDistance = -1;
   private double _lastTouch0X = -1;
   private double _lastTouch0Y = -1;
@@ -79,6 +81,20 @@ public partial class RemoteDisplay : JsInteropableComponent
     }
   }
   private double CanvasWidth => RemoteControlState.SelectedDisplay?.Width ?? 0;
+  private string AnnotationCanvasStyle
+  {
+    get
+    {
+      var display = RemoteControlStream.IsConnected
+        ? "display: unset;"
+        : "display: none;";
+
+      return
+        $"{display} " +
+        $"width: {RemoteControlState.CanvasPixelWidth}px; " +
+        $"height: {RemoteControlState.CanvasPixelHeight}px;";
+    }
+  }
   private string OuterClass =>
     IsVisible
       ? string.Empty
@@ -364,6 +380,20 @@ public partial class RemoteDisplay : JsInteropableComponent
     }
   }
 
+  private void HandleAnnotationModeToggled(bool isEnabled)
+  {
+    _isAnnotationMode = isEnabled;
+  }
+
+  private async Task HandleAudioToggled(bool isEnabled)
+  {
+    _isAudioEnabled = isEnabled;
+    if (RemoteControlStream.IsConnected)
+    {
+      await RemoteControlStream.SendAudioControl(isEnabled, 48000, 2, ComponentClosing);
+    }
+  }
+
   private async Task HandleDisconnectClicked()
   {
     await OnDisconnectRequested.InvokeAsync();
@@ -472,6 +502,24 @@ public partial class RemoteDisplay : JsInteropableComponent
         case DtoType.BlockInputResult:
           {
             // Handled in InputPopover.
+            break;
+          }
+        case DtoType.GetAvailableResolutionsResult:
+        case DtoType.ChangeResolutionResult:
+          {
+            // Handled in ExtrasPopover.
+            break;
+          }
+        case DtoType.GetPrintersResult:
+        case DtoType.PrintJobResult:
+          {
+            // Handled in ExtrasPopover.
+            break;
+          }
+        case DtoType.AudioPacket:
+          {
+            // TODO: Implement audio playback via Web Audio API.
+            // Audio packets are received but playback is not yet implemented.
             break;
           }
         case DtoType.PrivacyScreenResult:

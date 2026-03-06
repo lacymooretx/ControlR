@@ -1,0 +1,378 @@
+@page "/session-recordings/playback"
+@rendermode InteractiveWebAssembly
+@attribute [Authorize(Roles = RoleNames.TenantAdministrator)]
+@implements IDisposable
+@inject ILazyInjector<IControlrApi> ControlrApi
+@inject ISnackbar Snackbar
+@inject NavigationManager NavMan
+
+<MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
+  <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Color="Color.Default"
+    OnClick="@(() => NavMan.NavigateTo(ClientRoutes.SessionRecordings))" title="Back to recordings" />
+  <MudText Typo="Typo.h4" Color="Color.Primary">
+    Session Recording Playback
+  </MudText>
+</MudStack>
+
+@if (_loading)
+{
+  <MudProgressLinear Indeterminate Color="Color.Primary" />
+}
+else if (_error is not null)
+{
+  <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_recording is not null)
+{
+  <MudPaper Class="pa-3 mb-4">
+    <MudStack Row Spacing="4" AlignItems="AlignItems.Center">
+      <MudStack Spacing="0">
+        <MudText Typo="Typo.caption">Device</MudText>
+        <MudText Typo="Typo.body1"><b>@(_recording.DeviceName ?? "Unknown")</b></MudText>
+      </MudStack>
+      <MudStack Spacing="0">
+        <MudText Typo="Typo.caption">Technician</MudText>
+        <MudText Typo="Typo.body1"><b>@(_recording.RecorderUserName ?? "Unknown")</b></MudText>
+      </MudStack>
+      <MudStack Spacing="0">
+        <MudText Typo="Typo.caption">Date</MudText>
+        <MudText Typo="Typo.body1">@_recording.SessionStartedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</MudText>
+      </MudStack>
+      <MudStack Spacing="0">
+        <MudText Typo="Typo.caption">Duration</MudText>
+        <MudText Typo="Typo.body1">@FormatDuration(_recording.DurationMs)</MudText>
+      </MudStack>
+    </MudStack>
+  </MudPaper>
+
+  @if (_timestamps.Length == 0)
+  {
+    <MudAlert Severity="Severity.Warning">
+      This recording has no frames to play back.
+    </MudAlert>
+  }
+  else
+  {
+    <MudPaper Class="pa-2 mb-2" Style="background: #1a1a1a; text-align: center; min-height: 400px; display: flex; align-items: center; justify-content: center;">
+      @if (_currentFrameIndex >= 0 && _currentFrameIndex < _timestamps.Length)
+      {
+        <img src="@GetFrameUrl(_timestamps[_currentFrameIndex])"
+          style="max-width: 100%; max-height: 75vh; object-fit: contain;"
+          alt="Recording frame @(_currentFrameIndex + 1)" />
+      }
+    </MudPaper>
+
+    @* Preload next frames for smooth playback *@
+    <div style="display: none;" aria-hidden="true">
+      @foreach (var ts in GetPreloadTimestamps())
+      {
+        <img src="@GetFrameUrl(ts)" alt="" />
+      }
+    </div>
+
+    <MudPaper Class="pa-3">
+      <MudStack Spacing="2">
+        <MudSlider T="int" Value="_currentFrameIndex" ValueChanged="OnSeek"
+          Min="0" Max="@(_timestamps.Length - 1)" Step="1"
+          Color="Color.Primary" />
+
+        <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+          <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+            <MudIconButton Icon="@Icons.Material.Filled.SkipPrevious" Color="Color.Default"
+              Size="Size.Small" OnClick="GoToStart" title="Go to start"
+              Disabled="@(_currentFrameIndex <= 0)" />
+
+            <MudIconButton Icon="@Icons.Material.Filled.FastRewind" Color="Color.Default"
+              Size="Size.Small" OnClick="StepBackward" title="Previous frame"
+              Disabled="@(_currentFrameIndex <= 0)" />
+
+            @if (_isPlaying)
+            {
+              <MudIconButton Icon="@Icons.Material.Filled.Pause" Color="Color.Primary"
+                OnClick="Pause" title="Pause" />
+            }
+            else
+            {
+              <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Color="Color.Primary"
+                OnClick="Play" title="Play"
+                Disabled="@(_currentFrameIndex >= _timestamps.Length - 1)" />
+            }
+
+            <MudIconButton Icon="@Icons.Material.Filled.FastForward" Color="Color.Default"
+              Size="Size.Small" OnClick="StepForward" title="Next frame"
+              Disabled="@(_currentFrameIndex >= _timestamps.Length - 1)" />
+
+            <MudIconButton Icon="@Icons.Material.Filled.SkipNext" Color="Color.Default"
+              Size="Size.Small" OnClick="GoToEnd" title="Go to end"
+              Disabled="@(_currentFrameIndex >= _timestamps.Length - 1)" />
+          </MudStack>
+
+          <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+            <MudText Typo="Typo.body2" Style="white-space: nowrap;">
+              @FormatElapsedTime() / @FormatTotalTime()
+            </MudText>
+
+            <MudDivider Vertical FlexItem />
+
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Style="white-space: nowrap;">
+              Frame @(_currentFrameIndex + 1) of @_timestamps.Length
+            </MudText>
+          </MudStack>
+
+          <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+            <MudText Typo="Typo.body2">Speed:</MudText>
+            <MudSelect T="double" Value="_playbackSpeed" ValueChanged="OnSpeedChanged"
+              Dense Margin="Margin.Dense" Style="width: 90px;" Variant="Variant.Outlined">
+              <MudSelectItem T="double" Value="0.25">0.25x</MudSelectItem>
+              <MudSelectItem T="double" Value="0.5">0.5x</MudSelectItem>
+              <MudSelectItem T="double" Value="1.0">1x</MudSelectItem>
+              <MudSelectItem T="double" Value="2.0">2x</MudSelectItem>
+              <MudSelectItem T="double" Value="4.0">4x</MudSelectItem>
+            </MudSelect>
+          </MudStack>
+        </MudStack>
+      </MudStack>
+    </MudPaper>
+  }
+}
+
+@code {
+  [SupplyParameterFromQuery]
+  public Guid? Id { get; set; }
+
+  private bool _loading = true;
+  private string? _error;
+  private SessionRecordingDto? _recording;
+  private long[] _timestamps = [];
+  private int _currentFrameIndex;
+  private bool _isPlaying;
+  private double _playbackSpeed = 1.0;
+  private Timer? _playbackTimer;
+
+  protected override async Task OnInitializedAsync()
+  {
+    if (Id is null || Id == Guid.Empty)
+    {
+      _error = "No recording ID specified.";
+      _loading = false;
+      return;
+    }
+
+    await LoadRecording();
+  }
+
+  private async Task LoadRecording()
+  {
+    _loading = true;
+    StateHasChanged();
+
+    var recordingResult = await ControlrApi.Value.GetSessionRecording(Id!.Value);
+    if (!recordingResult.IsSuccess)
+    {
+      _error = $"Failed to load recording: {recordingResult.Reason}";
+      _loading = false;
+      return;
+    }
+
+    _recording = recordingResult.Value;
+
+    var framesResult = await ControlrApi.Value.GetSessionRecordingFrameList(Id!.Value);
+    if (!framesResult.IsSuccess)
+    {
+      _error = $"Failed to load frame list: {framesResult.Reason}";
+      _loading = false;
+      return;
+    }
+
+    _timestamps = framesResult.Value ?? [];
+    _currentFrameIndex = 0;
+    _loading = false;
+  }
+
+  private void Play()
+  {
+    if (_currentFrameIndex >= _timestamps.Length - 1)
+    {
+      return;
+    }
+
+    _isPlaying = true;
+    ScheduleNextFrame();
+  }
+
+  private void Pause()
+  {
+    _isPlaying = false;
+    StopTimer();
+  }
+
+  private void ScheduleNextFrame()
+  {
+    StopTimer();
+
+    if (!_isPlaying || _currentFrameIndex >= _timestamps.Length - 1)
+    {
+      _isPlaying = false;
+      InvokeAsync(StateHasChanged);
+      return;
+    }
+
+    var currentTs = _timestamps[_currentFrameIndex];
+    var nextTs = _timestamps[_currentFrameIndex + 1];
+    var delayMs = (nextTs - currentTs) / _playbackSpeed;
+
+    // Clamp to reasonable bounds: min 1ms, max 5000ms
+    var adjustedDelay = (int)Math.Clamp(delayMs, 1, 5000);
+
+    _playbackTimer = new Timer(async _ =>
+    {
+      await InvokeAsync(() =>
+      {
+        if (!_isPlaying)
+        {
+          return;
+        }
+
+        _currentFrameIndex++;
+        StateHasChanged();
+
+        if (_currentFrameIndex >= _timestamps.Length - 1)
+        {
+          _isPlaying = false;
+        }
+        else
+        {
+          ScheduleNextFrame();
+        }
+      });
+    }, null, adjustedDelay, Timeout.Infinite);
+  }
+
+  private void StopTimer()
+  {
+    _playbackTimer?.Dispose();
+    _playbackTimer = null;
+  }
+
+  private void OnSeek(int frameIndex)
+  {
+    var wasPlaying = _isPlaying;
+    Pause();
+
+    _currentFrameIndex = Math.Clamp(frameIndex, 0, _timestamps.Length - 1);
+
+    if (wasPlaying && _currentFrameIndex < _timestamps.Length - 1)
+    {
+      Play();
+    }
+  }
+
+  private void OnSpeedChanged(double speed)
+  {
+    _playbackSpeed = speed;
+
+    if (_isPlaying)
+    {
+      ScheduleNextFrame();
+    }
+  }
+
+  private void StepForward()
+  {
+    Pause();
+    if (_currentFrameIndex < _timestamps.Length - 1)
+    {
+      _currentFrameIndex++;
+    }
+  }
+
+  private void StepBackward()
+  {
+    Pause();
+    if (_currentFrameIndex > 0)
+    {
+      _currentFrameIndex--;
+    }
+  }
+
+  private void GoToStart()
+  {
+    Pause();
+    _currentFrameIndex = 0;
+  }
+
+  private void GoToEnd()
+  {
+    Pause();
+    _currentFrameIndex = _timestamps.Length - 1;
+  }
+
+  private string GetFrameUrl(long timestampMs)
+  {
+    return $"/api/session-recordings/{Id}/frames/{timestampMs}";
+  }
+
+  private IEnumerable<long> GetPreloadTimestamps()
+  {
+    const int preloadCount = 3;
+    for (var i = 1; i <= preloadCount; i++)
+    {
+      var idx = _currentFrameIndex + i;
+      if (idx < _timestamps.Length)
+      {
+        yield return _timestamps[idx];
+      }
+    }
+  }
+
+  private string FormatElapsedTime()
+  {
+    if (_timestamps.Length == 0 || _currentFrameIndex < 0)
+    {
+      return "00:00";
+    }
+
+    var elapsedMs = _timestamps[_currentFrameIndex] - _timestamps[0];
+    return FormatTime(elapsedMs);
+  }
+
+  private string FormatTotalTime()
+  {
+    if (_timestamps.Length < 2)
+    {
+      return "00:00";
+    }
+
+    var totalMs = _timestamps[^1] - _timestamps[0];
+    return FormatTime(totalMs);
+  }
+
+  private static string FormatTime(long ms)
+  {
+    var ts = TimeSpan.FromMilliseconds(ms);
+    if (ts.TotalHours >= 1)
+    {
+      return $"{(int)ts.TotalHours:D2}:{ts.Minutes:D2}:{ts.Seconds:D2}";
+    }
+    return $"{ts.Minutes:D2}:{ts.Seconds:D2}";
+  }
+
+  private static string FormatDuration(long durationMs)
+  {
+    var ts = TimeSpan.FromMilliseconds(durationMs);
+    if (ts.TotalHours >= 1)
+    {
+      return $"{(int)ts.TotalHours}h {ts.Minutes}m {ts.Seconds}s";
+    }
+    if (ts.TotalMinutes >= 1)
+    {
+      return $"{ts.Minutes}m {ts.Seconds}s";
+    }
+    return $"{ts.Seconds}s";
+  }
+
+  public void Dispose()
+  {
+    StopTimer();
+  }
+}

@@ -25,6 +25,7 @@ builder.Services.AddSingleton<AuthenticationStateProvider, PersistentAuthenticat
 
 builder.Services.AddScoped<IUserSettingsProvider, UserSettingsProviderClient>();
 builder.Services.AddScoped<IPublicRegistrationSettingsProvider, PublicRegistrationSettingsProviderClient>();
+builder.Services.AddScoped<IBrandingState, BrandingStateClient>();
 
 builder.Services.AddControlrWebClient();
 

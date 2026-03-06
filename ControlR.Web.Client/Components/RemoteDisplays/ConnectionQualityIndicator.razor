@@ -1,0 +1,23 @@
+<MudTooltip Placement="Placement.Bottom" Class="z9002">
+  <TooltipContent>
+    <div class="d-flex flex-column gap-1 pa-1" style="min-width: 140px;">
+      <MudText Typo="Typo.subtitle2">Connection: @_quality</MudText>
+      @if (MetricsState.CurrentMetrics is not null)
+      {
+        <MudText Typo="Typo.caption">Latency: @($"{MetricsState.CurrentLatency.TotalMilliseconds:N0}") ms</MudText>
+        <MudText Typo="Typo.caption">FPS: @($"{MetricsState.CurrentMetrics.Fps:N1}")</MudText>
+        <MudText Typo="Typo.caption">In: @($"{MetricsState.MbpsIn:N2}") Mbps</MudText>
+        <MudText Typo="Typo.caption">Out: @($"{MetricsState.MbpsOut:N2}") Mbps</MudText>
+      }
+      else
+      {
+        <MudText Typo="Typo.caption">Waiting for metrics...</MudText>
+      }
+    </div>
+  </TooltipContent>
+  <ChildContent>
+    <MudIcon Icon="@Icons.Material.Filled.Circle"
+             Color="_iconColor"
+             Size="Size.Small" />
+  </ChildContent>
+</MudTooltip>

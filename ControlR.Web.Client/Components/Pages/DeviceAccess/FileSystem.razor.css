@@ -3,6 +3,7 @@
   display: grid;
   grid-template-rows: auto 1fr;
   row-gap: 16px;
+  position: relative;
 }
 
 .address-bar-container {
@@ -16,6 +17,33 @@
 
 .file-system-grid-cell {
   overflow: auto;
+}
+
+.drop-zone-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(var(--mud-palette-primary-rgb), 0.08);
+  border: 3px dashed var(--mud-palette-primary);
+  border-radius: 8px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.drop-zone-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px;
+  background: var(--mud-palette-surface);
+  border-radius: 8px;
+  box-shadow: var(--mud-elevation-4);
 }
 
 @media (max-width: 768px) {

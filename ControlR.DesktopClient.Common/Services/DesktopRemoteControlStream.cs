@@ -316,12 +316,6 @@ internal sealed class DesktopRemoteControlStream(
           }
         case DtoType.TogglePrivacyScreen:
           {
-            if (!_systemEnvironment.IsWindows())
-            {
-              _logger.LogWarning("TogglePrivacyScreen is only supported on Windows. Ignoring request.");
-              break;
-            }
-
             var payload = wrapper.GetPayload<TogglePrivacyScreenDto>();
             _logger.LogInformation("Toggling privacy screen to {isEnabled}.", payload.IsEnabled);
             var result = await _displayManager.SetPrivacyScreen(payload.IsEnabled);
@@ -329,6 +323,90 @@ internal sealed class DesktopRemoteControlStream(
             var resultDto = new PrivacyScreenResultDto(result.IsSuccess, _displayManager.IsPrivacyScreenEnabled);
             var resultWrapper = DtoWrapper.Create(resultDto, DtoType.PrivacyScreenResult);
             await Send(resultWrapper, _appLifetime.ApplicationStopping);
+            break;
+          }
+        case DtoType.GetAvailableResolutions:
+          {
+            var payload = wrapper.GetPayload<GetAvailableResolutionsDto>();
+            _logger.LogInformation("Getting available resolutions for display {DisplayId}.", payload.DisplayId);
+            var result = await _displayManager.GetAvailableResolutions(payload.DisplayId);
+
+            GetAvailableResolutionsResultDto resultDto;
+            if (result.IsSuccess)
+            {
+              var resolutions = result.Value
+                .Select(r => new AvailableResolutionDto(r.Width, r.Height, r.RefreshRate))
+                .ToArray();
+              resultDto = new GetAvailableResolutionsResultDto(true, null, resolutions);
+            }
+            else
+            {
+              resultDto = new GetAvailableResolutionsResultDto(false, result.Reason, []);
+            }
+
+            var resWrapper = DtoWrapper.Create(resultDto, DtoType.GetAvailableResolutionsResult);
+            await Send(resWrapper, _appLifetime.ApplicationStopping);
+            break;
+          }
+        case DtoType.ChangeResolution:
+          {
+            var payload = wrapper.GetPayload<ChangeResolutionDto>();
+            _logger.LogInformation(
+              "Changing resolution for display {DisplayId} to {Width}x{Height}.",
+              payload.DisplayId, payload.Width, payload.Height);
+            var result = await _displayManager.ChangeResolution(
+              payload.DisplayId, payload.Width, payload.Height, payload.RefreshRate);
+
+            var changeResultDto = new ChangeResolutionResultDto(result.IsSuccess, result.IsSuccess ? null : result.Reason);
+            var changeWrapper = DtoWrapper.Create(changeResultDto, DtoType.ChangeResolutionResult);
+            await Send(changeWrapper, _appLifetime.ApplicationStopping);
+
+            // After resolution change, reload displays and send updated display data
+            if (result.IsSuccess)
+            {
+              await _displayManager.ReloadDisplays();
+              await SendDisplayData();
+            }
+            break;
+          }
+        case DtoType.AnnotationStroke:
+          {
+            _logger.LogDebug("Received annotation stroke from viewer.");
+            break;
+          }
+        case DtoType.AnnotationClear:
+          {
+            _logger.LogDebug("Received annotation clear from viewer.");
+            break;
+          }
+        case DtoType.GetPrinters:
+          {
+            // TODO: Implement platform-specific printer enumeration.
+            _logger.LogInformation("Received GetPrinters request from viewer. Platform-specific implementation pending.");
+            var resultDto = new GetPrintersResultDto([]);
+            var resultWrapper = DtoWrapper.Create(resultDto, DtoType.GetPrintersResult);
+            await Send(resultWrapper, _appLifetime.ApplicationStopping);
+            break;
+          }
+        case DtoType.PrintJob:
+          {
+            // TODO: Implement platform-specific print job submission.
+            var payload = wrapper.GetPayload<PrintJobDto>();
+            _logger.LogInformation(
+              "Received PrintJob request from viewer. Printer: {PrinterName}, File: {FileName}, Copies: {Copies}. Platform-specific implementation pending.",
+              payload.PrinterName, payload.FileName, payload.Copies);
+            var printResultDto = new PrintJobResultDto(false, "Remote printing not yet implemented on this platform.");
+            var printResultWrapper = DtoWrapper.Create(printResultDto, DtoType.PrintJobResult);
+            await Send(printResultWrapper, _appLifetime.ApplicationStopping);
+            break;
+          }
+        case DtoType.AudioControl:
+          {
+            // TODO: Implement platform-specific audio capture.
+            var payload = wrapper.GetPayload<AudioControlDto>();
+            _logger.LogInformation(
+              "Received AudioControl request from viewer. Enabled: {IsEnabled}, SampleRate: {SampleRate}, Channels: {Channels}. Platform-specific implementation pending.",
+              payload.IsEnabled, payload.SampleRate, payload.Channels);
             break;
           }
         default:

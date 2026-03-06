@@ -97,9 +97,79 @@ internal class DisplayManagerMac(ILogger<DisplayManagerMac> logger, IDisplayEnum
     return Task.CompletedTask;
   }
 
-  public Task<Result> SetPrivacyScreen(bool isEnabled)
+  private bool _isPrivacyScreenEnabled;
+
+  public bool IsPrivacyScreenEnabled => _isPrivacyScreenEnabled;
+
+  public Task<Result> ChangeResolution(string displayId, int width, int height, int? refreshRate)
   {
-    throw new PlatformNotSupportedException("Privacy screen is only supported on Windows.");
+    return Task.FromResult(Result.Fail("Resolution change is not supported on macOS."));
+  }
+
+  public Task<Result<(int Width, int Height, int RefreshRate)[]>> GetAvailableResolutions(string displayId)
+  {
+    return Task.FromResult(Result.Fail<(int, int, int)[]>("Getting available resolutions is not supported on macOS."));
+  }
+
+  public async Task<Result> SetPrivacyScreen(bool isEnabled)
+  {
+    try
+    {
+      if (isEnabled == _isPrivacyScreenEnabled)
+      {
+        return Result.Ok();
+      }
+
+      if (isEnabled)
+      {
+        // Use DPMS to turn off displays via pmset command
+        var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+          FileName = "/usr/bin/pmset",
+          Arguments = "displaysleepnow",
+          UseShellExecute = false,
+          RedirectStandardOutput = true,
+          RedirectStandardError = true,
+          CreateNoWindow = true
+        });
+
+        if (process is not null)
+        {
+          await process.WaitForExitAsync();
+        }
+
+        _isPrivacyScreenEnabled = true;
+        _logger.LogInformation("Enabled privacy screen (display sleep) on macOS");
+        return Result.Ok();
+      }
+      else
+      {
+        // Wake displays by sending a caffeinate pulse
+        var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+          FileName = "/usr/bin/caffeinate",
+          Arguments = "-u -t 1",
+          UseShellExecute = false,
+          RedirectStandardOutput = true,
+          RedirectStandardError = true,
+          CreateNoWindow = true
+        });
+
+        if (process is not null)
+        {
+          await process.WaitForExitAsync();
+        }
+
+        _isPrivacyScreenEnabled = false;
+        _logger.LogInformation("Disabled privacy screen (display wake) on macOS");
+        return Result.Ok();
+      }
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error toggling privacy screen on macOS");
+      return Result.Fail($"Failed to {(isEnabled ? "enable" : "disable")} privacy screen on macOS: {ex.Message}");
+    }
   }
 
   public Task<Result<DisplayInfo>> TryFindDisplay(string deviceName)

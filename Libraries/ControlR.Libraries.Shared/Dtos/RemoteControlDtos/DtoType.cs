@@ -30,4 +30,20 @@ public enum DtoType
   PrivacyScreenResult = 47,
   SessionDisconnectRequested = 48,
   RemoteControlSessionError = 49,
+  GetAvailableResolutions = 50,
+  GetAvailableResolutionsResult = 51,
+  ChangeResolution = 52,
+  ChangeResolutionResult = 53,
+  AnnotationStroke = 54,
+  AnnotationClear = 55,
+
+  // Remote Printing
+  GetPrinters = 60,
+  GetPrintersResult = 61,
+  PrintJob = 62,
+  PrintJobResult = 63,
+
+  // Audio Forwarding
+  AudioControl = 70,
+  AudioPacket = 71,
 }

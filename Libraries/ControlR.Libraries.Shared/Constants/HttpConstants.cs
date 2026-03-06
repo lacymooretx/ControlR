@@ -2,12 +2,15 @@
 
 public static class HttpConstants
 {
+  public const string ActionVerificationEndpoint = "/api/action-verification";
   public const string AgentUpdateEndpoint = "/api/agent-update";
+  public const string BrandingEndpoint = "/api/branding";
   public const string AgentVersionEndpoint = "/api/version/agent";
   public const string AlertRulesEndpoint = "/api/alert-rules";
   public const string AlertsEndpoint = "/api/alerts";
   public const string AuditLogsEndpoint = "/api/audit-logs";
   public const string ClientPortalEndpoint = "/api/client-portal";
+  public const string CredentialsEndpoint = "/api/credentials";
   public const string DesktopPreviewEndpoint = "/api/desktop-preview";
   public const string DeviceFileSystemEndpoint = "/api/device-file-system";
   public const string DeviceGroupsEndpoint = "/api/device-groups";
@@ -15,11 +18,14 @@ public static class HttpConstants
   public const string DevicesEndpoint = "/api/devices";
   public const string InstallerKeysEndpoint = "/api/installer-keys";
   public const string InventoryEndpoint = "/api/inventory";
+  public const string JitAdminEndpoint = "/api/jit-admin";
   public const string InvitesEndpoint = "/api/invites";
   public const string LogonTokensEndpoint = "/api/logon-tokens";
   public const string LogoutEndpoint = "/api/logout";
   public const string MetricsEndpoint = "/api/metrics";
+  public const string PatchManagementEndpoint = "/api/patch-management";
   public const string PersonalAccessTokensEndpoint = "/api/personal-access-tokens";
+  public const string PluginsEndpoint = "/api/plugins";
   public const string PublicRegistrationSettingsEndpoint = "/api/public-registration-settings";
   public const string RolesEndpoint = "/api/roles";
   public const string ScheduledTasksEndpoint = "/api/scheduled-tasks";
@@ -28,10 +34,15 @@ public static class HttpConstants
   public const string ServerAlertEndpoint = "/api/server-alert";
   public const string ServerLogsEndpoint = "/api/server-logs";
   public const string ServerStatsEndpoint = "/api/server-stats";
+  public const string SuggestionsEndpoint = "/api/suggestions";
   public const string ServerVersionEndpoint = "/api/version/server";
+  public const string SessionRecordingsEndpoint = "/api/session-recordings";
+  public const string SupportSessionsEndpoint = "/api/support-sessions";
   public const string TagsEndpoint = "/api/tags";
   public const string TenantSettingsEndpoint = "/api/tenant-settings";
+  public const string ToolboxEndpoint = "/api/toolbox";
   public const string TestEmailEndpoint = "/api/test-email";
+  public const string TicketingEndpoint = "/api/ticketing";
   public const string UserPreferencesEndpoint = "/api/user-preferences";
   public const string UserRolesEndpoint = "/api/user-roles";
   public const string UserServerSettingsEndpoint = "/api/user-server-settings";

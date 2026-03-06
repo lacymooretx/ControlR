@@ -1,9 +1,4 @@
-@inject IRemoteControlState RemoteControlState
-@inject IDeviceState DeviceState
-@inject IViewerRemoteControlStream RemoteControlStream
-@inject IHubConnection<IViewerHub> ViewerHub
-@inject ISnackbar Snackbar
-@inject ILogger<ExtrasPopover> Logger
+@inherits DisposableComponent
 
 <div class="d-flex flex-column gap-3">
   <MudTooltip Text="Show metrics overlay">
@@ -13,11 +8,110 @@
                Label="Metrics"
                ThumbIcon="@(Icons.Material.Filled.QueryStats)" />
   </MudTooltip>
-</div>
 
-@code {
-  private void HandleMetricsToggled(bool value)
+  @if (DeviceState.TryGetCurrentDevice()?.Platform == SystemPlatform.Windows)
   {
-    RemoteControlState.IsMetricsEnabled = value;
+    <MudDivider Class="my-1" />
+    <MudText Typo="Typo.caption">Remote Resolution</MudText>
+
+    @if (_isLoadingResolutions)
+    {
+      <MudProgressCircular Size="Size.Small" Indeterminate />
+    }
+    else if (_availableResolutions is { Length: > 0 })
+    {
+      <MudSelect T="string"
+                 Value="_selectedResolution"
+                 ValueChanged="HandleResolutionChanged"
+                 Label="Resolution"
+                 Variant="Variant.Outlined"
+                 Margin="Margin.Dense"
+                 Dense
+                 Disabled="_isChangingResolution">
+        @foreach (var res in _availableResolutions)
+        {
+          <MudSelectItem Value="@($"{res.Width}x{res.Height}@{res.RefreshRate}")">
+            @res.Width x @res.Height @@ @(res.RefreshRate)Hz
+          </MudSelectItem>
+        }
+      </MudSelect>
+    }
+    else if (_resolutionError is not null)
+    {
+      <MudAlert Severity="Severity.Warning" Dense Class="mt-1">@_resolutionError</MudAlert>
+    }
+    else
+    {
+      <MudButton Variant="Variant.Outlined"
+                 StartIcon="@(Icons.Material.Filled.ScreenRotation)"
+                 Size="Size.Small"
+                 OnClick="HandleLoadResolutions"
+                 FullWidth>
+        Load Resolutions
+      </MudButton>
+    }
+
+    <MudDivider Class="my-2" />
+    <MudText Typo="Typo.caption">Remote Printing</MudText>
+
+    @if (_isLoadingPrinters)
+    {
+      <MudProgressCircular Size="Size.Small" Indeterminate />
+    }
+    else if (_availablePrinters is { Length: > 0 })
+    {
+      <MudSelect T="string"
+                 Value="_selectedPrinter"
+                 ValueChanged="@((string v) => _selectedPrinter = v)"
+                 Label="Printer"
+                 Variant="Variant.Outlined"
+                 Margin="Margin.Dense"
+                 Dense>
+        @foreach (var printer in _availablePrinters)
+        {
+          <MudSelectItem Value="@printer.Name">
+            @printer.Name @(printer.IsDefault ? "(Default)" : "")
+          </MudSelectItem>
+        }
+      </MudSelect>
+
+      <MudFileUpload T="IBrowserFile" FilesChanged="HandlePrintFileSelected" Accept=".pdf,.txt,.doc,.docx,.xls,.xlsx,.png,.jpg">
+        <ActivatorContent>
+          <MudButton Variant="Variant.Outlined"
+                     StartIcon="@(Icons.Material.Filled.UploadFile)"
+                     Size="Size.Small"
+                     FullWidth
+                     Class="mt-2">
+            Select File
+          </MudButton>
+        </ActivatorContent>
+      </MudFileUpload>
+
+      @if (_printFileName is not null)
+      {
+        <MudText Typo="Typo.caption" Class="mt-1">@_printFileName</MudText>
+      }
+
+      <MudButton Variant="Variant.Filled"
+                 Color="Color.Primary"
+                 StartIcon="@(Icons.Material.Filled.Print)"
+                 Size="Size.Small"
+                 OnClick="HandlePrintClicked"
+                 Disabled="@(_printFileData is null || string.IsNullOrEmpty(_selectedPrinter) || _isPrinting)"
+                 FullWidth
+                 Class="mt-2">
+        Print
+      </MudButton>
+    }
+    else
+    {
+      <MudButton Variant="Variant.Outlined"
+                 StartIcon="@(Icons.Material.Filled.Print)"
+                 Size="Size.Small"
+                 OnClick="HandleLoadPrinters"
+                 FullWidth>
+        Load Printers
+      </MudButton>
+    }
   }
-}
+</div>

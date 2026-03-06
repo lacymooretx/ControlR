@@ -88,6 +88,7 @@ public class DevicesController : ControllerBase
     return entity.ToDto(isOutdated);
   }
 
+  [RequiresVerification]
   [HttpDelete("{deviceId:guid}")]
   public async Task<IActionResult> DeleteDevice(
     [FromServices] AppDb appDb,

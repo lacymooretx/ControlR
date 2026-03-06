@@ -1,0 +1,131 @@
+@using ControlR.Libraries.Shared.Enums
+@inject IControlrApi ControlrApi
+@inject ISnackbar Snackbar
+
+<MudDialog>
+  <DialogContent>
+    <MudTextField @bind-Value="_name" Label="Name" Required Class="mb-3"
+      Placeholder="e.g. Jira Production, ServiceNow Dev" />
+    <MudSelect T="TicketingProvider" @bind-Value="_provider" Label="Provider" Required Class="mb-3">
+      @foreach (var p in Enum.GetValues<TicketingProvider>())
+      {
+        <MudSelectItem T="TicketingProvider" Value="p">@p.ToString()</MudSelectItem>
+      }
+    </MudSelect>
+    <MudTextField @bind-Value="_baseUrl" Label="Base URL" Required Class="mb-3"
+      HelperText="Endpoint URL for the ticketing API or webhook receiver" />
+    <MudTextField @bind-Value="_apiKey" Label="API Key"
+      InputType="InputType.Password" Class="mb-3"
+      HelperText="@(Integration is null ? "API key for authentication" : "Leave empty to keep existing key")" />
+    <MudTextField @bind-Value="_defaultProject" Label="Default Project" Class="mb-3"
+      Placeholder="Optional project key or ID" />
+    <MudTextField @bind-Value="_fieldMappingJson" Label="Field Mapping (JSON)" Lines="3" Class="mb-3"
+      Placeholder="Optional JSON for custom field mappings" />
+
+    @if (Integration is not null)
+    {
+      <MudSwitch T="bool" @bind-Value="_isEnabled" Label="Enabled" Color="Color.Success" Class="mt-3" />
+    }
+  </DialogContent>
+  <DialogActions>
+    <MudButton OnClick="Cancel">Cancel</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save"
+      Disabled="@(_saving || string.IsNullOrWhiteSpace(_name) || string.IsNullOrWhiteSpace(_baseUrl))">
+      @if (_saving)
+      {
+        <MudProgressCircular Indeterminate Size="Size.Small" Class="mr-2" />
+      }
+      Save
+    </MudButton>
+  </DialogActions>
+</MudDialog>
+
+@code {
+  [CascadingParameter]
+  private IMudDialogInstance MudDialog { get; set; } = null!;
+
+  [Parameter]
+  public TicketingIntegrationDto? Integration { get; set; }
+
+  private string _apiKey = string.Empty;
+  private string _baseUrl = string.Empty;
+  private string _defaultProject = string.Empty;
+  private string _fieldMappingJson = string.Empty;
+  private bool _isEnabled = true;
+  private string _name = string.Empty;
+  private TicketingProvider _provider = TicketingProvider.Custom;
+  private bool _saving;
+
+  protected override void OnInitialized()
+  {
+    if (Integration is not null)
+    {
+      _name = Integration.Name;
+      _provider = Integration.Provider;
+      _baseUrl = Integration.BaseUrl;
+      _defaultProject = Integration.DefaultProject ?? string.Empty;
+      _fieldMappingJson = Integration.FieldMappingJson ?? string.Empty;
+      _isEnabled = Integration.IsEnabled;
+    }
+  }
+
+  private void Cancel() => MudDialog.Cancel();
+
+  private async Task Save()
+  {
+    _saving = true;
+
+    if (Integration is null)
+    {
+      if (string.IsNullOrWhiteSpace(_apiKey))
+      {
+        Snackbar.Add("API key is required for new integrations.", Severity.Warning);
+        _saving = false;
+        return;
+      }
+
+      var request = new CreateTicketingIntegrationDto(
+        _name,
+        _provider,
+        _baseUrl,
+        _apiKey,
+        string.IsNullOrWhiteSpace(_defaultProject) ? null : _defaultProject,
+        string.IsNullOrWhiteSpace(_fieldMappingJson) ? null : _fieldMappingJson);
+
+      var result = await ControlrApi.CreateTicketingIntegration(request);
+      if (!result.IsSuccess)
+      {
+        Snackbar.Add(result.Reason, Severity.Error);
+        _saving = false;
+        return;
+      }
+
+      Snackbar.Add("Integration created.", Severity.Success);
+    }
+    else
+    {
+      var request = new UpdateTicketingIntegrationDto(
+        Integration.Id,
+        _name,
+        _provider,
+        _baseUrl,
+        string.IsNullOrWhiteSpace(_apiKey) ? null : _apiKey,
+        string.IsNullOrWhiteSpace(_defaultProject) ? null : _defaultProject,
+        _isEnabled,
+        string.IsNullOrWhiteSpace(_fieldMappingJson) ? null : _fieldMappingJson);
+
+      var result = await ControlrApi.UpdateTicketingIntegration(Integration.Id, request);
+      if (!result.IsSuccess)
+      {
+        Snackbar.Add(result.Reason, Severity.Error);
+        _saving = false;
+        return;
+      }
+
+      Snackbar.Add("Integration updated.", Severity.Success);
+    }
+
+    _saving = false;
+    MudDialog.Close(DialogResult.Ok(true));
+  }
+}

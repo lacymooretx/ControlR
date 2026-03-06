@@ -20,26 +20,38 @@ public class AppDb : IdentityDbContext<AppUser, AppRole, Guid>, IDataProtectionK
   public DbSet<AgentInstallerKeyUsage> AgentInstallerKeyUsages { get; init; }
   public DbSet<AgentInstallerKey> AgentInstallerKeys { get; init; }
   public DbSet<AlertRule> AlertRules { get; init; }
+  public DbSet<AutomationSuggestion> AutomationSuggestions { get; init; }
+  public DbSet<BrandingSettings> BrandingSettings { get; init; }
   public DbSet<Alert> Alerts { get; init; }
   public DbSet<AuditLog> AuditLogs { get; init; }
   public DbSet<ClientDeviceAssignment> ClientDeviceAssignments { get; init; }
   public DbSet<DataProtectionKey> DataProtectionKeys { get; set; }
   public DbSet<DeviceGroup> DeviceGroups { get; init; }
+  public DbSet<StoredCredential> StoredCredentials { get; init; }
   public DbSet<DeviceMetricSnapshot> DeviceMetricSnapshots { get; init; }
   public DbSet<Device> Devices { get; init; }
   public DbSet<InstalledUpdate> InstalledUpdates { get; init; }
+  public DbSet<PatchInstallation> PatchInstallations { get; init; }
+  public DbSet<PendingPatch> PendingPatches { get; init; }
+  public DbSet<JitAdminAccount> JitAdminAccounts { get; init; }
   public DbSet<PersonalAccessToken> PersonalAccessTokens { get; init; }
+  public DbSet<PluginRegistration> PluginRegistrations { get; init; }
   public DbSet<SavedScript> SavedScripts { get; init; }
   public DbSet<ScheduledTaskExecution> ScheduledTaskExecutions { get; init; }
   public DbSet<ScheduledTask> ScheduledTasks { get; init; }
   public DbSet<ScriptExecutionResult> ScriptExecutionResults { get; init; }
   public DbSet<ScriptExecution> ScriptExecutions { get; init; }
   public DbSet<ServerAlert> ServerAlerts { get; init; }
+  public DbSet<SessionRecording> SessionRecordings { get; init; }
   public DbSet<SoftwareInventoryItem> SoftwareInventoryItems { get; init; }
+  public DbSet<SupportSession> SupportSessions { get; init; }
   public DbSet<Tag> Tags { get; init; }
   public DbSet<TenantInvite> TenantInvites { get; init; }
+  public DbSet<ToolboxItem> ToolboxItems { get; init; }
   public DbSet<TenantSetting> TenantSettings { get; init; }
   public DbSet<Tenant> Tenants { get; init; }
+  public DbSet<TicketingIntegration> TicketingIntegrations { get; init; }
+  public DbSet<TicketLink> TicketLinks { get; init; }
   public DbSet<UserPreference> UserPreferences { get; init; }
   public DbSet<WebhookDeliveryLog> WebhookDeliveryLogs { get; init; }
   public DbSet<WebhookSubscription> WebhookSubscriptions { get; init; }
@@ -58,6 +70,7 @@ public class AppDb : IdentityDbContext<AppUser, AppRole, Guid>, IDataProtectionK
 
     ConfigureClientDeviceAssignments(builder);
     ConfigurePersonalAccessTokens(builder);
+    ConfigurePluginRegistrations(builder);
     ConfigureServerAlert(builder);
     ConfigureTenant(builder);
     ConfigureDeviceGroups(builder);
@@ -73,14 +86,25 @@ public class AppDb : IdentityDbContext<AppUser, AppRole, Guid>, IDataProtectionK
     ConfigureAlertRules(builder);
     ConfigureAlerts(builder);
     ConfigureAuditLogs(builder);
+    ConfigureAutomationSuggestions(builder);
+    ConfigureBrandingSettings(builder);
     ConfigureDeviceMetricSnapshots(builder);
     ConfigureInstalledUpdates(builder);
+    ConfigureJitAdminAccounts(builder);
+    ConfigurePatchInstallations(builder);
+    ConfigurePendingPatches(builder);
     ConfigureSavedScripts(builder);
     ConfigureScheduledTaskExecutions(builder);
     ConfigureScheduledTasks(builder);
     ConfigureScriptExecutions(builder);
     ConfigureScriptExecutionResults(builder);
+    ConfigureSessionRecordings(builder);
     ConfigureSoftwareInventoryItems(builder);
+    ConfigureSupportSessions(builder);
+    ConfigureStoredCredentials(builder);
+    ConfigureTicketingIntegrations(builder);
+    ConfigureTicketLinks(builder);
+    ConfigureToolboxItems(builder);
     ConfigureWebhookDeliveryLogs(builder);
     ConfigureWebhookSubscriptions(builder);
   }
@@ -212,6 +236,44 @@ public class AppDb : IdentityDbContext<AppUser, AppRole, Guid>, IDataProtectionK
         .HasQueryFilter(x => x.TenantId == _tenantId);
     }
   }
+  private void ConfigureAutomationSuggestions(ModelBuilder builder)
+  {
+    builder
+      .Entity<AutomationSuggestion>()
+      .HasIndex(x => x.Status);
+
+    builder
+      .Entity<AutomationSuggestion>()
+      .HasIndex(x => x.DeviceId);
+
+    builder
+      .Entity<AutomationSuggestion>()
+      .HasOne(x => x.SuggestedScript)
+      .WithMany()
+      .HasForeignKey(x => x.SuggestedScriptId)
+      .OnDelete(DeleteBehavior.SetNull);
+
+    if (_tenantId is not null)
+    {
+      builder
+        .Entity<AutomationSuggestion>()
+        .HasQueryFilter(x => x.TenantId == _tenantId);
+    }
+  }
+  private void ConfigureBrandingSettings(ModelBuilder builder)
+  {
+    builder
+      .Entity<BrandingSettings>()
+      .HasIndex(x => x.TenantId)
+      .IsUnique();
+
+    if (_tenantId is not null)
+    {
+      builder
+        .Entity<BrandingSettings>()
+        .HasQueryFilter(x => x.TenantId == _tenantId);
+    }
+  }
   private void ConfigureClientDeviceAssignments(ModelBuilder builder)
   {
     builder
@@ -308,6 +370,61 @@ public class AppDb : IdentityDbContext<AppUser, AppRole, Guid>, IDataProtectionK
         .HasQueryFilter(x => x.TenantId == _tenantId);
     }
   }
+  private void ConfigureJitAdminAccounts(ModelBuilder builder)
+  {
+    builder
+      .Entity<JitAdminAccount>()
+      .HasIndex(x => x.DeviceId);
+
+    builder
+      .Entity<JitAdminAccount>()
+      .HasIndex(x => x.Status);
+
+    builder
+      .Entity<JitAdminAccount>()
+      .HasIndex(x => x.ExpiresAt);
+
+    if (_tenantId is not null)
+    {
+      builder
+        .Entity<JitAdminAccount>()
+        .HasQueryFilter(x => x.TenantId == _tenantId);
+    }
+  }
+  private void ConfigurePatchInstallations(ModelBuilder builder)
+  {
+    builder
+      .Entity<PatchInstallation>()
+      .HasIndex(x => x.DeviceId);
+
+    builder
+      .Entity<PatchInstallation>()
+      .HasIndex(x => x.Status);
+
+    if (_tenantId is not null)
+    {
+      builder
+        .Entity<PatchInstallation>()
+        .HasQueryFilter(x => x.TenantId == _tenantId);
+    }
+  }
+  private void ConfigurePendingPatches(ModelBuilder builder)
+  {
+    builder
+      .Entity<PendingPatch>()
+      .HasIndex(x => new { x.DeviceId, x.UpdateId });
+
+    builder
+      .Entity<PendingPatch>()
+      .HasIndex(x => x.Status);
+
+    if (_tenantId is not null)
+    {
+      builder
+        .Entity<PendingPatch>()
+        .HasQueryFilter(x => x.TenantId == _tenantId);
+    }
+  }
   private void ConfigurePersonalAccessTokens(ModelBuilder builder)
   {
     builder
@@ -338,6 +455,20 @@ public class AppDb : IdentityDbContext<AppUser, AppRole, Guid>, IDataProtectionK
       builder
         .Entity<PersonalAccessToken>()
         .HasQueryFilter(x => x.User != null && x.User.TenantId == _tenantId);
+    }
+  }
+  private void ConfigurePluginRegistrations(ModelBuilder builder)
+  {
+    builder
+      .Entity<PluginRegistration>()
+      .HasIndex(x => new { x.Name, x.TenantId })
+      .IsUnique();
+
+    if (_tenantId is not null)
+    {
+      builder
+        .Entity<PluginRegistration>()
+        .HasQueryFilter(x => x.TenantId == _tenantId);
     }
   }
   private void ConfigureSavedScripts(ModelBuilder builder)
@@ -430,6 +561,23 @@ public class AppDb : IdentityDbContext<AppUser, AppRole, Guid>, IDataProtectionK
         .HasQueryFilter(x => x.TenantId == _tenantId);
     }
   }
+  private void ConfigureSessionRecordings(ModelBuilder builder)
+  {
+    builder
+      .Entity<SessionRecording>()
+      .HasIndex(x => x.SessionId);
+
+    builder
+      .Entity<SessionRecording>()
+      .HasIndex(x => x.DeviceId);
+
+    if (_tenantId is not null)
+    {
+      builder
+        .Entity<SessionRecording>()
+        .HasQueryFilter(x => x.TenantId == _tenantId);
+    }
+  }
   private void ConfigureSoftwareInventoryItems(ModelBuilder builder)
   {
     builder
@@ -440,6 +588,24 @@ public class AppDb : IdentityDbContext<AppUser, AppRole, Guid>, IDataProtectionK
     {
       builder
         .Entity<SoftwareInventoryItem>()
+        .HasQueryFilter(x => x.TenantId == _tenantId);
+    }
+  }
+  private void ConfigureSupportSessions(ModelBuilder builder)
+  {
+    builder
+      .Entity<SupportSession>()
+      .HasIndex(x => new { x.AccessCode, x.TenantId })
+      .IsUnique();
+
+    builder
+      .Entity<SupportSession>()
+      .HasIndex(x => x.Status);
+
+    if (_tenantId is not null)
+    {
+      builder
+        .Entity<SupportSession>()
         .HasQueryFilter(x => x.TenantId == _tenantId);
     }
   }
@@ -454,6 +620,73 @@ public class AppDb : IdentityDbContext<AppUser, AppRole, Guid>, IDataProtectionK
     {
       builder
         .Entity<Tag>()
+        .HasQueryFilter(x => x.TenantId == _tenantId);
+    }
+  }
+  private void ConfigureStoredCredentials(ModelBuilder builder)
+  {
+    builder
+      .Entity<StoredCredential>()
+      .HasIndex(x => new { x.Name, x.TenantId })
+      .IsUnique();
+
+    builder
+      .Entity<StoredCredential>()
+      .HasIndex(x => x.DeviceId);
+
+    builder
+      .Entity<StoredCredential>()
+      .HasIndex(x => x.DeviceGroupId);
+
+    if (_tenantId is not null)
+    {
+      builder
+        .Entity<StoredCredential>()
+        .HasQueryFilter(x => x.TenantId == _tenantId);
+    }
+  }
+  private void ConfigureTicketingIntegrations(ModelBuilder builder)
+  {
+    builder
+      .Entity<TicketingIntegration>()
+      .HasIndex(x => new { x.Name, x.TenantId })
+      .IsUnique();
+
+    if (_tenantId is not null)
+    {
+      builder
+        .Entity<TicketingIntegration>()
+        .HasQueryFilter(x => x.TenantId == _tenantId);
+    }
+  }
+  private void ConfigureTicketLinks(ModelBuilder builder)
+  {
+    builder
+      .Entity<TicketLink>()
+      .HasIndex(x => x.DeviceId);
+
+    builder
+      .Entity<TicketLink>()
+      .HasIndex(x => x.AlertId);
+
+    if (_tenantId is not null)
+    {
+      builder
+        .Entity<TicketLink>()
+        .HasQueryFilter(x => x.TenantId == _tenantId);
+    }
+  }
+  private void ConfigureToolboxItems(ModelBuilder builder)
+  {
+    builder
+      .Entity<ToolboxItem>()
+      .HasIndex(x => new { x.Name, x.TenantId })
+      .IsUnique();
+
+    if (_tenantId is not null)
+    {
+      builder
+        .Entity<ToolboxItem>()
         .HasQueryFilter(x => x.TenantId == _tenantId);
     }
   }

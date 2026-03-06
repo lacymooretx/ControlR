@@ -3,10 +3,12 @@ namespace ControlR.Web.Client;
 public static class ClientRoutes
 {
   public const string About = "/about";
+  public const string Branding = "/branding";
   public const string AlertRules = "/alert-rules";
   public const string AssetManagement = "/asset-management";
   public const string AuditLog = "/audit-log";
   public const string ClientDashboard = "/client";
+  public const string Credentials = "/credentials";
   public const string ClientsManagement = "/clients";
   public const string Deploy = "/deploy";
   public const string DeviceAccess = "/device-access";
@@ -20,12 +22,15 @@ public static class ClientRoutes
   public const string DeviceInventory = "/device-inventory";
   public const string Home = "/";
   public const string InstallerKeys = "/installer-keys";
+  public const string JitAdmin = "/jit-admin";
   public const string Invite = "/invite";
   public const string InviteConfirmation = InviteConfirmationBase + "/{activationCode?}";
   public const string InviteConfirmationBase = "/invite-confirmation";
   public const string Monitoring = "/monitoring";
   public const string NotFound = "/not-found";
+  public const string PatchManagement = "/patch-management";
   public const string Permissions = "/permissions";
+  public const string Plugins = "/plugins";
   public const string PersonalAccessTokens = "/personal-access-tokens";
   public const string ScheduledTasks = "/scheduled-tasks";
   public const string ScriptExecution = "/script-execution";
@@ -34,6 +39,13 @@ public static class ClientRoutes
   public const string ServerSettings = "/server-settings";
   public const string ServerStats = "/server-stats";
   public const string Settings = "/settings";
+  public const string SessionRecordingPlayback = "/session-recordings/playback";
+  public const string SessionRecordings = "/session-recordings";
+  public const string Suggestions = "/suggestions";
+  public const string SupportSessionJoin = "/support";
+  public const string SupportSessions = "/support-sessions";
   public const string TenantSettings = "/tenant-settings";
+  public const string Ticketing = "/ticketing";
+  public const string Toolbox = "/toolbox";
   public const string Webhooks = "/webhooks";
 }

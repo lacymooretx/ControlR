@@ -11,7 +11,9 @@ public interface IDisplayManager
   {
     get => false;
   }
+  Task<Result> ChangeResolution(string displayId, int width, int height, int? refreshRate);
   Task<Point> ConvertPercentageLocationToAbsolute(string displayName, double percentX, double percentY);
+  Task<Result<(int Width, int Height, int RefreshRate)[]>> GetAvailableResolutions(string displayId);
   Task<ImmutableList<DisplayInfo>> GetDisplays();
   Task<DisplayInfo?> GetPrimaryDisplay();
   Task<Rectangle> GetVirtualScreenBounds();

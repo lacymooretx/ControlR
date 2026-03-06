@@ -37,9 +37,16 @@
 			</MudAppBar>
 			<MudDrawer @bind-Open="DrawerOpen" id="nav-drawer" ClipMode="DrawerClipMode.Always" Elevation="2">
 				<MudDrawerHeader Class="pa-4">
-					<MudImage Src=@Assets["appicon-192.png"] Height="30" Class="me-2" />
+					@if (!string.IsNullOrEmpty(BrandingState.LogoUrl))
+					{
+						<MudImage Src="@BrandingState.LogoUrl" Height="30" Class="me-2" />
+					}
+					else
+					{
+						<MudImage Src=@Assets["appicon-192.png"] Height="30" Class="me-2" />
+					}
 					<MudText Typo="Typo.h6" Color="Color.Primary">
-						ControlR
+						@BrandingState.ProductName
 					</MudText>
 				</MudDrawerHeader>
 				<DeviceAccessNavMenu IsDisabled="@(IsNavMenuDisabled)" />
@@ -76,7 +83,7 @@
 					if (!string.IsNullOrWhiteSpace(_deviceName))
 					{
 						<PageTitle>
-							ControlR - @(_deviceName)
+							@BrandingState.ProductName - @(_deviceName)
 						</PageTitle>
 					}
 					@Body

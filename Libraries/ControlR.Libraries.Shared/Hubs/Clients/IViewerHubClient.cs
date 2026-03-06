@@ -10,6 +10,8 @@ public interface IViewerHubClient
   Task<bool> ReceiveChatResponse(ChatResponseHubDto dto);
   Task ReceiveDeviceUpdate(DeviceResponseDto deviceDto);
   Task ReceiveScriptExecutionProgress(ScriptExecutionResultHubDto result);
+  Task ReceivePatchScanProgress(PatchScanResultHubDto result);
+  Task ReceivePatchInstallProgress(PatchInstallResultHubDto result);
   Task ReceiveServerStats(ServerStatsDto serverStats);
   Task ReceivePtyOutput(PtyOutputDto output);
   Task ReceiveTerminalOutput(TerminalOutputDto output);

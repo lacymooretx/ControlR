@@ -239,6 +239,136 @@ public class AgentHub(
     }
   }
 
+  public async Task ReportPatchScanResult(PatchScanResultHubDto result)
+  {
+    try
+    {
+      if (Device is null)
+      {
+        _logger.LogWarning("ReportPatchScanResult called but Device is null.");
+        return;
+      }
+
+      var device = await _appDb.Devices
+        .AsNoTracking()
+        .FirstOrDefaultAsync(d => d.Id == result.DeviceId);
+
+      if (device is null)
+      {
+        _logger.LogWarning("Device {DeviceId} not found for patch scan result.", result.DeviceId);
+        return;
+      }
+
+      var now = DateTimeOffset.UtcNow;
+
+      // Remove existing pending patches for this device that are still in Pending status
+      var existingPending = await _appDb.PendingPatches
+        .Where(p => p.DeviceId == result.DeviceId && p.Status == "Pending")
+        .ToListAsync();
+      _appDb.PendingPatches.RemoveRange(existingPending);
+
+      // Add newly detected patches
+      foreach (var patch in result.AvailablePatches)
+      {
+        var pendingPatch = new PendingPatch
+        {
+          DeviceId = result.DeviceId,
+          UpdateId = patch.UpdateId,
+          Title = patch.Title,
+          Description = patch.Description,
+          IsImportant = patch.IsImportant,
+          IsCritical = patch.IsCritical,
+          SizeBytes = patch.SizeBytes,
+          DetectedAt = now,
+          Status = "Pending",
+          TenantId = device.TenantId,
+        };
+        await _appDb.PendingPatches.AddAsync(pendingPatch);
+      }
+
+      await _appDb.SaveChangesAsync();
+
+      _logger.LogInformation(
+        "Patch scan result received for device {DeviceName}: {PatchCount} available patches.",
+        device.Name, result.AvailablePatches.Length);
+
+      // Forward to viewers
+      if (Device is { TenantId: var tenantId })
+      {
+        await _viewerHub.Clients
+          .Group(HubGroupNames.GetUserRoleGroupName(RoleNames.TenantAdministrator, tenantId))
+          .ReceivePatchScanProgress(result);
+
+        await _viewerHub.Clients
+          .Group(HubGroupNames.GetUserRoleGroupName(RoleNames.DeviceSuperUser, tenantId))
+          .ReceivePatchScanProgress(result);
+      }
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error processing patch scan result.");
+    }
+  }
+
+  public async Task ReportPatchInstallResult(PatchInstallResultHubDto result)
+  {
+    try
+    {
+      if (Device is null)
+      {
+        _logger.LogWarning("ReportPatchInstallResult called but Device is null.");
+        return;
+      }
+
+      // Find the most recent in-progress installation for this device
+      var installation = await _appDb.PatchInstallations
+        .Where(i => i.DeviceId == result.DeviceId && i.Status == "InProgress")
+        .OrderByDescending(i => i.InitiatedAt)
+        .FirstOrDefaultAsync();
+
+      if (installation is not null)
+      {
+        installation.CompletedAt = DateTimeOffset.UtcNow;
+        installation.InstalledCount = result.InstalledCount;
+        installation.FailedCount = result.FailedCount;
+        installation.Status = result.IsSuccess ? "Completed" : "CompletedWithErrors";
+      }
+
+      // Mark successfully installed patches
+      if (result.InstalledCount > 0)
+      {
+        var pendingPatches = await _appDb.PendingPatches
+          .Where(p => p.DeviceId == result.DeviceId && p.Status == "Pending")
+          .ToListAsync();
+
+        // We don't know exactly which patches were installed from the result alone,
+        // so mark them based on a subsequent scan. For now, just save the installation result.
+      }
+
+      await _appDb.SaveChangesAsync();
+
+      _logger.LogInformation(
+        "Patch install result received for device {DeviceId}: Success={IsSuccess}, Installed={Installed}, Failed={Failed}",
+        result.DeviceId, result.IsSuccess, result.InstalledCount, result.FailedCount);
+
+      // Forward to viewers
+      if (Device is { TenantId: var tenantId })
+      {
+        await _viewerHub.Clients
+          .Group(HubGroupNames.GetUserRoleGroupName(RoleNames.TenantAdministrator, tenantId))
+          .ReceivePatchInstallProgress(result);
+
+        await _viewerHub.Clients
+          .Group(HubGroupNames.GetUserRoleGroupName(RoleNames.DeviceSuperUser, tenantId))
+          .ReceivePatchInstallProgress(result);
+      }
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error processing patch install result.");
+    }
+  }
+
   public async Task<bool> SendChatResponse(ChatResponseHubDto responseDto)
   {
     try

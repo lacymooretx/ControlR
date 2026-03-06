@@ -1,4 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Threading.Channels;
 using ControlR.Libraries.Shared.Constants;
 using ControlR.Libraries.Shared.Dtos.Devices;
@@ -22,9 +23,11 @@ public class ViewerHub(
   IHubStreamStore hubStreamStore,
   IOptionsMonitor<AppOptions> appOptions,
   IAuditService auditService,
+  IActionVerificationService actionVerificationService,
   ILogger<ViewerHub> logger)
   : HubWithItems<IViewerHubClient>, IViewerHub
 {
+  private readonly IActionVerificationService _actionVerificationService = actionVerificationService;
   private readonly IHubContext<AgentHub, IAgentHubClient> _agentHub = agentHub;
   private readonly AppDb _appDb = appDb;
   private readonly IOptionsMonitor<AppOptions> _appOptions = appOptions;
@@ -162,6 +165,11 @@ public class ViewerHub(
   {
     try
     {
+      if (!IsActionVerified())
+      {
+        return Result.Fail<ScriptExecutionDto>("Action verification required. Please verify your identity first.");
+      }
+
       if (!TryGetUserId(out var userId))
       {
         return Result.Fail<ScriptExecutionDto>("Failed to get user ID.");
@@ -779,6 +787,47 @@ public class ViewerHub(
     }
   }
 
+  public async Task<Result> RequestSafeModeReboot(Guid deviceId, bool withNetworking = true)
+  {
+    try
+    {
+      if (!IsActionVerified())
+      {
+        return Result.Fail("Action verification required. Please verify your identity first.");
+      }
+
+      if (await TryAuthorizeAgainstDevice(deviceId) is not { IsSuccess: true } authResult)
+      {
+        return Result.Fail("Unauthorized.");
+      }
+
+      var device = authResult.Value;
+
+      if (device.Platform != SystemPlatform.Windows)
+      {
+        return Result.Fail("Safe Mode reboot is only supported on Windows devices.");
+      }
+
+      var request = new SafeModeRebootRequestHubDto(withNetworking);
+      var result = await _agentHub.Clients
+        .Client(device.ConnectionId)
+        .RebootToSafeMode(request);
+
+      if (result.IsSuccess)
+      {
+        AuditHubAction(AuditEventTypes.PowerState, AuditActions.SafeModeReboot, device,
+          details: $"WithNetworking: {withNetworking}");
+      }
+
+      return result;
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while requesting Safe Mode reboot for device {DeviceId}.", deviceId);
+      return Result.Fail("Agent could not be reached.");
+    }
+  }
+
   public async Task<Result> ResizePty(Guid deviceId, PtyResizeDto dto)
   {
     try
@@ -899,10 +948,266 @@ public class ViewerHub(
     }
   }
 
+  public async Task<Result> RequestPatchScan(Guid deviceId)
+  {
+    try
+    {
+      if (await TryAuthorizeAgainstDevice(deviceId) is not { IsSuccess: true } authResult)
+      {
+        return Result.Fail("Unauthorized.");
+      }
+
+      var device = authResult.Value;
+
+      if (device.Platform != SystemPlatform.Windows)
+      {
+        return Result.Fail("Patch scanning is only supported on Windows devices.");
+      }
+
+      var request = new PatchScanRequestHubDto();
+      var result = await _agentHub.Clients
+        .Client(device.ConnectionId)
+        .ScanForPatches(request);
+
+      if (result.IsSuccess)
+      {
+        AuditHubAction(AuditEventTypes.PatchManagement, AuditActions.Scan, device);
+      }
+
+      return result;
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while requesting patch scan for device {DeviceId}.", deviceId);
+      return Result.Fail("Agent could not be reached.");
+    }
+  }
+
+  public async Task<Result> RequestPatchInstall(Guid deviceId, string[] updateIds)
+  {
+    try
+    {
+      if (!IsActionVerified())
+      {
+        return Result.Fail("Action verification required. Please verify your identity first.");
+      }
+
+      if (await TryAuthorizeAgainstDevice(deviceId) is not { IsSuccess: true } authResult)
+      {
+        return Result.Fail("Unauthorized.");
+      }
+
+      if (!TryGetUserId(out var userId))
+      {
+        return Result.Fail("Failed to get user ID.");
+      }
+
+      if (!TryGetTenantId(out var tenantId))
+      {
+        return Result.Fail("Failed to get tenant ID.");
+      }
+
+      var device = authResult.Value;
+
+      if (device.Platform != SystemPlatform.Windows)
+      {
+        return Result.Fail("Patch installation is only supported on Windows devices.");
+      }
+
+      // Create installation record
+      var installation = new PatchInstallation
+      {
+        DeviceId = deviceId,
+        InitiatedByUserId = userId,
+        InitiatedAt = DateTimeOffset.UtcNow,
+        TotalCount = updateIds.Length,
+        Status = "InProgress",
+        TenantId = tenantId,
+      };
+      await _appDb.PatchInstallations.AddAsync(installation);
+      await _appDb.SaveChangesAsync();
+
+      var request = new PatchInstallRequestHubDto(updateIds);
+      var result = await _agentHub.Clients
+        .Client(device.ConnectionId)
+        .InstallPatches(request);
+
+      if (result.IsSuccess)
+      {
+        AuditHubAction(AuditEventTypes.PatchManagement, AuditActions.Install, device,
+          details: $"UpdateIds: {string.Join(", ", updateIds)}");
+      }
+
+      return result;
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while requesting patch install for device {DeviceId}.", deviceId);
+      return Result.Fail("Agent could not be reached.");
+    }
+  }
+
+  public async Task<Result<CreateJitAdminResponseDto>> RequestCreateJitAdmin(Guid deviceId, int ttlMinutes = 60)
+  {
+    try
+    {
+      if (await TryAuthorizeAgainstDevice(deviceId) is not { IsSuccess: true } authResult)
+      {
+        return Result.Fail<CreateJitAdminResponseDto>("Unauthorized.");
+      }
+
+      var device = authResult.Value;
+
+      if (device.Platform != SystemPlatform.Windows)
+      {
+        return Result.Fail<CreateJitAdminResponseDto>("JIT Admin accounts are only supported on Windows devices.");
+      }
+
+      if (string.IsNullOrWhiteSpace(device.ConnectionId))
+      {
+        return Result.Fail<CreateJitAdminResponseDto>("Device is not currently connected.");
+      }
+
+      if (!TryGetUserId(out var userId))
+      {
+        return Result.Fail<CreateJitAdminResponseDto>("Failed to get user ID.");
+      }
+
+      if (!TryGetTenantId(out var tenantId))
+      {
+        return Result.Fail<CreateJitAdminResponseDto>("Failed to get tenant ID.");
+      }
+
+      // Generate random username and password
+      var hexSuffix = Convert.ToHexString(RandomNumberGenerator.GetBytes(3)).ToLowerInvariant();
+      var username = $"jit-admin-{hexSuffix}";
+      var password = GenerateSecurePassword(16);
+
+      // Clamp TTL between 5 and 1440 minutes (24 hours)
+      ttlMinutes = Math.Clamp(ttlMinutes, 5, 1440);
+
+      // Create DB entity
+      var jitAccount = new JitAdminAccount
+      {
+        DeviceId = device.Id,
+        DeviceName = device.Name,
+        Username = username,
+        CreatedByUserId = userId,
+        CreatedByUserName = Context.User?.Identity?.Name,
+        ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(ttlMinutes),
+        Status = JitAdminAccountStatus.Active,
+        TenantId = tenantId,
+      };
+
+      await _appDb.JitAdminAccounts.AddAsync(jitAccount);
+      await _appDb.SaveChangesAsync();
+
+      // Send to agent
+      var hubDto = new CreateJitAdminRequestHubDto(username, password, ttlMinutes);
+      var agentResult = await _agentHub.Clients
+        .Client(device.ConnectionId)
+        .CreateJitAdminAccount(hubDto);
+
+      if (!agentResult.IsSuccess)
+      {
+        jitAccount.Status = JitAdminAccountStatus.Failed;
+        await _appDb.SaveChangesAsync();
+
+        _logger.LogError(
+          "Agent failed to create JIT admin account on device {DeviceId}: {Reason}",
+          deviceId,
+          agentResult.Reason);
+
+        return Result.Fail<CreateJitAdminResponseDto>(
+          $"Agent failed to create account: {agentResult.Reason}");
+      }
+
+      AuditHubAction(AuditEventTypes.JitAdmin, AuditActions.Create, device,
+        details: $"Username: {username}, TTL: {ttlMinutes}min, Expires: {jitAccount.ExpiresAt:O}");
+
+      var dto = jitAccount.ToDto();
+      return Result.Ok(new CreateJitAdminResponseDto(dto, password));
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while creating JIT admin account for device {DeviceId}.", deviceId);
+      return Result.Fail<CreateJitAdminResponseDto>("An error occurred while creating JIT admin account.");
+    }
+  }
+
+  public async Task<Result> RequestDeleteJitAdmin(Guid deviceId, Guid jitAccountId)
+  {
+    try
+    {
+      if (await TryAuthorizeAgainstDevice(deviceId) is not { IsSuccess: true } authResult)
+      {
+        return Result.Fail("Unauthorized.");
+      }
+
+      var device = authResult.Value;
+
+      if (!TryGetTenantId(out var tenantId))
+      {
+        return Result.Fail("Failed to get tenant ID.");
+      }
+
+      var jitAccount = await _appDb.JitAdminAccounts
+        .FirstOrDefaultAsync(x => x.Id == jitAccountId && x.DeviceId == deviceId);
+
+      if (jitAccount is null)
+      {
+        return Result.Fail("JIT admin account not found.");
+      }
+
+      if (jitAccount.Status != JitAdminAccountStatus.Active)
+      {
+        return Result.Fail("JIT admin account is not active.");
+      }
+
+      // Send delete to agent if device is online
+      if (!string.IsNullOrWhiteSpace(device.ConnectionId))
+      {
+        try
+        {
+          var hubDto = new DeleteJitAdminRequestHubDto(jitAccount.Username);
+          await _agentHub.Clients
+            .Client(device.ConnectionId)
+            .DeleteJitAdminAccount(hubDto);
+        }
+        catch (Exception ex)
+        {
+          _logger.LogWarning(ex,
+            "Failed to send delete command to agent for JIT account {Username} on device {DeviceId}. Marking as deleted anyway.",
+            jitAccount.Username, deviceId);
+        }
+      }
+
+      jitAccount.Status = JitAdminAccountStatus.ManuallyDeleted;
+      jitAccount.DeletedAt = DateTimeOffset.UtcNow;
+      await _appDb.SaveChangesAsync();
+
+      AuditHubAction(AuditEventTypes.JitAdmin, AuditActions.Delete, device,
+        details: $"Username: {jitAccount.Username}, ManualDelete");
+
+      return Result.Ok();
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while deleting JIT admin account {JitAccountId} on device {DeviceId}.", jitAccountId, deviceId);
+      return Result.Fail("An error occurred while deleting JIT admin account.");
+    }
+  }
+
   public async Task UninstallAgent(Guid deviceId, string reason)
   {
     try
     {
+      if (!IsActionVerified())
+      {
+        _logger.LogWarning("Action verification required for UninstallAgent. User: {UserName}.", Context.UserIdentifier);
+        return;
+      }
+
       if (await TryAuthorizeAgainstDevice(deviceId) is not { IsSuccess: true } authResult)
       {
         return;
@@ -1100,6 +1405,15 @@ public class ViewerHub(
     return user;
   }
 
+  private bool IsActionVerified()
+  {
+    if (!TryGetUserId(out var userId))
+    {
+      return false;
+    }
+    return _actionVerificationService.IsVerified(userId);
+  }
+
   private bool IsServerAdmin()
   {
     return Context.User?.IsInRole(RoleNames.ServerAdministrator) ?? false;
@@ -1170,5 +1484,36 @@ public class ViewerHub(
 
     _logger.LogError("UserId claim is unexpected missing when calling {MemberName}.", callerName);
     return false;
+  }
+
+  private static string GenerateSecurePassword(int length)
+  {
+    const string upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const string lower = "abcdefghijklmnopqrstuvwxyz";
+    const string digits = "0123456789";
+    const string special = "!@#$%&*?";
+    const string allChars = upper + lower + digits + special;
+
+    Span<char> password = stackalloc char[length];
+
+    // Ensure at least one of each category
+    password[0] = upper[RandomNumberGenerator.GetInt32(upper.Length)];
+    password[1] = lower[RandomNumberGenerator.GetInt32(lower.Length)];
+    password[2] = digits[RandomNumberGenerator.GetInt32(digits.Length)];
+    password[3] = special[RandomNumberGenerator.GetInt32(special.Length)];
+
+    for (var i = 4; i < length; i++)
+    {
+      password[i] = allChars[RandomNumberGenerator.GetInt32(allChars.Length)];
+    }
+
+    // Shuffle using Fisher-Yates
+    for (var i = length - 1; i > 0; i--)
+    {
+      var j = RandomNumberGenerator.GetInt32(i + 1);
+      (password[i], password[j]) = (password[j], password[i]);
+    }
+
+    return new string(password);
   }
 }

@@ -4,6 +4,16 @@ namespace ControlR.Web.Server.Extensions;
 
 public static class EntityToDtoExtensions
 {
+  public static BrandingSettingsDto ToDto(this BrandingSettings settings)
+  {
+    return new BrandingSettingsDto(
+      settings.Id,
+      settings.ProductName,
+      settings.PrimaryColor,
+      settings.SecondaryColor,
+      settings.LogoFileName,
+      !string.IsNullOrEmpty(settings.LogoStoragePath));
+  }
   public static CreateInstallerKeyResponseDto ToCreateResponseDto(this AgentInstallerKey key, string plaintextKey)
   {
     return new CreateInstallerKeyResponseDto(
@@ -15,6 +25,19 @@ public static class EntityToDtoExtensions
       key.AllowedUses,
       key.Expiration,
       key.FriendlyName);
+  }
+  public static AutomationSuggestionDto ToDto(this AutomationSuggestion suggestion)
+  {
+    return new AutomationSuggestionDto(
+      suggestion.Id,
+      suggestion.DeviceId,
+      suggestion.SuggestionType.ToString(),
+      suggestion.Title,
+      suggestion.Description,
+      suggestion.SuggestedScriptId,
+      suggestion.Confidence,
+      suggestion.Status.ToString(),
+      suggestion.CreatedAt);
   }
   public static AlertDto ToDto(this Alert alert)
   {
@@ -101,6 +124,48 @@ public static class EntityToDtoExtensions
       DeviceGroupName = device.DeviceGroup?.Name,
       TagIds = device.Tags?.Select(x => x.Id).ToImmutableArray()
     };
+  }
+  public static JitAdminAccountDto ToDto(this JitAdminAccount account)
+  {
+    return new JitAdminAccountDto(
+      account.Id,
+      account.DeviceId,
+      account.DeviceName,
+      account.Username,
+      account.CreatedByUserId,
+      account.CreatedByUserName,
+      account.ExpiresAt,
+      account.DeletedAt,
+      (JitAdminAccountStatusDto)(int)account.Status,
+      account.CreatedAt);
+  }
+  public static PendingPatchDto ToDto(this PendingPatch patch)
+  {
+    return new PendingPatchDto(
+      patch.Id,
+      patch.DeviceId,
+      patch.UpdateId,
+      patch.Title,
+      patch.Description,
+      patch.IsImportant,
+      patch.IsCritical,
+      patch.SizeBytes,
+      patch.DetectedAt,
+      patch.InstalledAt,
+      patch.Status);
+  }
+  public static PatchInstallationDto ToDto(this PatchInstallation installation)
+  {
+    return new PatchInstallationDto(
+      installation.Id,
+      installation.DeviceId,
+      installation.InitiatedByUserId,
+      installation.InitiatedAt,
+      installation.CompletedAt,
+      installation.TotalCount,
+      installation.InstalledCount,
+      installation.FailedCount,
+      installation.Status);
   }
   public static InstalledUpdateDto ToDto(this InstalledUpdate update)
   {
@@ -267,6 +332,97 @@ public static class EntityToDtoExtensions
       log.ErrorMessage,
       log.AttemptNumber);
   }
+  public static SupportSessionDto ToDto(this SupportSession session)
+  {
+    return new SupportSessionDto(
+      session.Id,
+      session.AccessCode,
+      session.ClientName,
+      session.ClientEmail,
+      session.CreatorUserId,
+      session.CreatorUserName,
+      session.DeviceId,
+      session.DeviceName,
+      session.ExpiresAt,
+      session.IsUsed,
+      session.Notes,
+      session.SessionStartedAt,
+      session.SessionEndedAt,
+      (SupportSessionStatusDto)(int)session.Status,
+      session.CreatedAt);
+  }
+
+  public static SessionRecordingDto ToDto(this SessionRecording recording)
+  {
+    return new SessionRecordingDto(
+      recording.Id,
+      recording.SessionId,
+      recording.DeviceId,
+      recording.DeviceName,
+      recording.RecorderUserId,
+      recording.RecorderUserName,
+      recording.SessionStartedAt,
+      recording.SessionEndedAt,
+      recording.DurationMs,
+      recording.FrameCount,
+      recording.StorageSizeBytes,
+      recording.Notes,
+      (SessionRecordingStatusDto)(int)recording.Status,
+      recording.CreatedAt);
+  }
+
+  public static StoredCredentialDto ToDto(this StoredCredential credential)
+  {
+    return new StoredCredentialDto(
+      credential.Id,
+      credential.Name,
+      credential.Description,
+      credential.Username,
+      credential.Domain,
+      credential.DeviceId,
+      credential.DeviceGroupId,
+      credential.Category,
+      credential.CreatedByUserId,
+      credential.CreatedByUserName,
+      credential.LastAccessedAt,
+      credential.AccessCount,
+      credential.CreatedAt);
+  }
+
+  public static ToolboxItemDto ToDto(this ToolboxItem item)
+  {
+    return new ToolboxItemDto(
+      item.Id,
+      item.Name,
+      item.Description,
+      item.FileName,
+      item.Category,
+      item.Version,
+      item.FileSizeBytes,
+      item.Sha256Hash,
+      item.UploadedByUserId,
+      item.UploadedByUserName,
+      item.DeploymentCount,
+      item.CreatedAt);
+  }
+
+  public static PluginRegistrationDto ToDto(
+    this PluginRegistration registration,
+    IReadOnlyList<LoadedPlugin> loadedPlugins)
+  {
+    var loaded = loadedPlugins.FirstOrDefault(p => p.RegistrationId == registration.Id);
+    return new PluginRegistrationDto(
+      registration.Id,
+      registration.Name,
+      registration.AssemblyPath,
+      registration.PluginTypeName,
+      registration.IsEnabled,
+      registration.ConfigurationJson,
+      registration.LastLoadedAt,
+      loaded?.Instance.Version,
+      loaded?.Instance.Description,
+      registration.CreatedAt);
+  }
   public static WebhookSubscriptionDto ToDto(this WebhookSubscription subscription)
   {
     return new WebhookSubscriptionDto(
@@ -279,5 +435,32 @@ public static class EntityToDtoExtensions
       subscription.FailureCount,
       subscription.LastTriggeredAt,
       subscription.LastStatus);
+  }
+
+  public static TicketingIntegrationDto ToDto(this TicketingIntegration integration)
+  {
+    return new TicketingIntegrationDto(
+      integration.Id,
+      integration.Name,
+      integration.Provider,
+      integration.BaseUrl,
+      integration.DefaultProject,
+      integration.IsEnabled,
+      integration.FieldMappingJson);
+  }
+
+  public static TicketLinkDto ToDto(this TicketLink link)
+  {
+    return new TicketLinkDto(
+      link.Id,
+      link.ExternalTicketId,
+      link.ExternalTicketUrl,
+      link.Provider,
+      link.Subject,
+      link.DeviceId,
+      link.SessionId,
+      link.AlertId,
+      link.CreatedByUserId,
+      link.CreatedAt);
   }
 }

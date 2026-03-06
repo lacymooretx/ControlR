@@ -40,6 +40,16 @@ public class ViewerHubClient(IMessenger messenger)
     await _messenger.Send(new DtoReceivedMessage<ScriptExecutionResultHubDto>(result));
   }
 
+  public async Task ReceivePatchScanProgress(PatchScanResultHubDto result)
+  {
+    await _messenger.Send(new DtoReceivedMessage<PatchScanResultHubDto>(result));
+  }
+
+  public async Task ReceivePatchInstallProgress(PatchInstallResultHubDto result)
+  {
+    await _messenger.Send(new DtoReceivedMessage<PatchInstallResultHubDto>(result));
+  }
+
   public async Task ReceiveServerStats(ServerStatsDto serverStats)
   {
     var message = new DtoReceivedMessage<ServerStatsDto>(serverStats);

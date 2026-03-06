@@ -1,0 +1,195 @@
+@page "/plugins"
+@attribute [Authorize(Roles = RoleNames.TenantAdministrator)]
+@inject IControlrApi ControlrApi
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudText Typo="Typo.h4" Color="Color.Primary" GutterBottom>
+  Plugins
+</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+  <MudStack Row AlignItems="AlignItems.Center">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+      StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+      Register Plugin
+    </MudButton>
+    <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
+      StartIcon="@Icons.Material.Filled.Refresh" OnClick="ReloadAllPlugins">
+      Reload All
+    </MudButton>
+    <MudSpacer />
+    <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Info"
+      OnClick="RefreshPlugins" />
+  </MudStack>
+</MudPaper>
+
+@if (_loading)
+{
+  <MudProgressLinear Indeterminate Color="Color.Primary" />
+}
+else if (_plugins.Count == 0)
+{
+  <MudAlert Severity="Severity.Info">
+    No plugins registered. Register a plugin to extend ControlR functionality.
+  </MudAlert>
+}
+else
+{
+  <MudDataGrid T="PluginRegistrationDto" Items="_plugins" SortMode="SortMode.Single"
+    Filterable="false" Hideable="false">
+    <Columns>
+      <PropertyColumn Property="x => x.Name" Title="Name" />
+      <TemplateColumn T="PluginRegistrationDto" Title="Version" Sortable="false">
+        <CellTemplate>
+          @(context.Item.LoadedVersion ?? "—")
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="PluginRegistrationDto" Title="Status" Sortable="false">
+        <CellTemplate>
+          @if (context.Item.IsEnabled)
+          {
+            if (context.Item.LoadedVersion is not null)
+            {
+              <MudChip T="string" Color="Color.Success" Size="Size.Small">Loaded</MudChip>
+            }
+            else
+            {
+              <MudChip T="string" Color="Color.Warning" Size="Size.Small">Enabled (Not Loaded)</MudChip>
+            }
+          }
+          else
+          {
+            <MudChip T="string" Color="Color.Default" Size="Size.Small">Disabled</MudChip>
+          }
+        </CellTemplate>
+      </TemplateColumn>
+      <PropertyColumn Property="x => x.PluginTypeName" Title="Type" />
+      <TemplateColumn T="PluginRegistrationDto" Title="Last Loaded" Sortable="false">
+        <CellTemplate>
+          @if (context.Item.LastLoadedAt.HasValue)
+          {
+            @context.Item.LastLoadedAt.Value.ToString("yyyy-MM-dd HH:mm:ss")
+          }
+          else
+          {
+            <MudText Typo="Typo.body2">—</MudText>
+          }
+        </CellTemplate>
+      </TemplateColumn>
+      <TemplateColumn T="PluginRegistrationDto" Title="Actions" Sortable="false">
+        <CellTemplate>
+          @{
+            var plugin = context.Item;
+          }
+          <MudStack Row>
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary"
+              Size="Size.Small" OnClick="@(() => OpenEditDialog(plugin))" />
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+              Size="Size.Small" OnClick="@(() => DeletePlugin(plugin))" />
+          </MudStack>
+        </CellTemplate>
+      </TemplateColumn>
+    </Columns>
+  </MudDataGrid>
+}
+
+@code {
+  private bool _loading = true;
+  private List<PluginRegistrationDto> _plugins = [];
+
+  protected override async Task OnInitializedAsync()
+  {
+    await RefreshPlugins();
+  }
+
+  private async Task DeletePlugin(PluginRegistrationDto plugin)
+  {
+    var confirmed = await DialogService.ShowMessageBox(
+      "Delete Plugin",
+      $"Are you sure you want to delete '{plugin.Name}'?",
+      "Delete", "Cancel");
+
+    if (confirmed != true)
+    {
+      return;
+    }
+
+    var result = await ControlrApi.DeletePlugin(plugin.Id);
+    if (result.IsSuccess)
+    {
+      Snackbar.Add("Plugin deleted.", Severity.Success);
+      await RefreshPlugins();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to delete plugin: {result.Reason}", Severity.Error);
+    }
+  }
+
+  private async Task OpenCreateDialog()
+  {
+    var parameters = new DialogParameters<PluginEditDialog>
+    {
+      { x => x.Plugin, null },
+    };
+
+    var dialog = await DialogService.ShowAsync<PluginEditDialog>("Register Plugin", parameters,
+      new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+    var dialogResult = await dialog.Result;
+
+    if (dialogResult is { Canceled: false })
+    {
+      await RefreshPlugins();
+    }
+  }
+
+  private async Task OpenEditDialog(PluginRegistrationDto plugin)
+  {
+    var parameters = new DialogParameters<PluginEditDialog>
+    {
+      { x => x.Plugin, plugin },
+    };
+
+    var dialog = await DialogService.ShowAsync<PluginEditDialog>("Edit Plugin", parameters,
+      new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+    var dialogResult = await dialog.Result;
+
+    if (dialogResult is { Canceled: false })
+    {
+      await RefreshPlugins();
+    }
+  }
+
+  private async Task RefreshPlugins()
+  {
+    _loading = true;
+    StateHasChanged();
+
+    var result = await ControlrApi.GetAllPlugins();
+    if (result.IsSuccess)
+    {
+      _plugins = result.Value.ToList();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to load plugins: {result.Reason}", Severity.Error);
+    }
+
+    _loading = false;
+  }
+
+  private async Task ReloadAllPlugins()
+  {
+    var result = await ControlrApi.ReloadPlugins();
+    if (result.IsSuccess)
+    {
+      Snackbar.Add("Plugins reloaded.", Severity.Success);
+      await RefreshPlugins();
+    }
+    else
+    {
+      Snackbar.Add($"Failed to reload plugins: {result.Reason}", Severity.Error);
+    }
+  }
+}

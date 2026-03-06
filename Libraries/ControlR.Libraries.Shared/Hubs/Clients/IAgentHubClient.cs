@@ -14,12 +14,15 @@ public interface IAgentHubClient : IHubClient
   Task CloseTerminalSession(Guid terminalSessionId);
   Task CollectInventory();
   Task<Result> CreateDirectory(CreateDirectoryHubDto dto);
+  Task<Result> CreateJitAdminAccount(CreateJitAdminRequestHubDto request);
+  Task<Result> DeleteJitAdminAccount(DeleteJitAdminRequestHubDto request);
   Task<Result> CreateRemoteControlSession(RemoteControlSessionRequestDto dto);
   Task<Result> CreatePtySession(Guid terminalSessionId, string viewerConnectionId, int cols, int rows);
   Task<Result> CreateTerminalSession(Guid terminalSessionId, string viewerConnectionId);
   Task<Result> CreateVncSession(VncSessionRequestDto sessionRequestDto);
   Task<Result> DeleteFile(FileDeleteHubDto dto);
   Task<Result> DownloadFileFromViewer(FileUploadHubDto dto);
+  Task<Result> MoveFile(MoveFileHubDto dto);
   Task ExecuteScript(ScriptExecutionRequestHubDto request);
   Task<DesktopSession[]> GetActiveDesktopSessions();
   Task<Result<GetLogFilesResponseDto>> GetLogFiles();
@@ -30,6 +33,7 @@ public interface IAgentHubClient : IHubClient
   Task InvokeWakeDevice(WakeDeviceDto dto);
   Task ReceiveAgentUpdateTrigger();
   Task ReceivePowerStateChange(PowerStateChangeType changeType);
+  Task<Result> RebootToSafeMode(SafeModeRebootRequestHubDto request);
   Task<Result> ReceivePtyInput(PtyInputDto dto);
   Task<Result> ReceiveTerminalInput(TerminalInputDto dto);
   Task<Result> ResizePty(PtyResizeDto dto);
@@ -39,6 +43,8 @@ public interface IAgentHubClient : IHubClient
   Task<Result> StreamDirectoryContents(DirectoryContentsStreamRequestHubDto dto);
   Task<Result> StreamFileContents(StreamFileContentsRequestHubDto dto);
   Task<Result> StreamSubdirectories(SubdirectoriesStreamRequestHubDto dto);
+  Task<Result> ScanForPatches(PatchScanRequestHubDto request);
+  Task<Result> InstallPatches(PatchInstallRequestHubDto request);
   Task<Result> TestVncConnection(int port);
   Task UninstallAgent(string reason);
   Task<Result<FileDownloadResponseHubDto>> UploadFileToViewer(FileDownloadHubDto dto);

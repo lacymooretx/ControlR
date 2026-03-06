@@ -20,6 +20,20 @@
         <ExtrasPopover />
       </PopoverButton>
 
+      <MudDivider Vertical FlexItem />
+
+      <MudTooltip Text="Annotate" Placement="Placement.Right" Class="z9002">
+        <MudToggleIconButton Variant="Variant.Outlined" Icon="@(Icons.Material.Filled.Draw)" Size="Size.Small"
+          ToggledColor="Color.Warning" ToggledIcon="@(Icons.Material.Filled.Draw)"
+          Toggled="_isAnnotationMode" ToggledChanged="HandleAnnotationModeToggled" />
+      </MudTooltip>
+
+      <MudTooltip Text="Toggle Audio" Placement="Placement.Right" Class="z9002">
+        <MudToggleIconButton Variant="Variant.Outlined" Icon="@(Icons.Material.Filled.VolumeOff)" Size="Size.Small"
+          ToggledColor="Color.Success" ToggledIcon="@(Icons.Material.Filled.VolumeUp)"
+          Toggled="_isAudioEnabled" ToggledChanged="HandleAudioToggled" />
+      </MudTooltip>
+
       @if (_controlMode == ControlMode.Touch)
       {
         <MudDivider Vertical FlexItem />
@@ -38,6 +52,8 @@
       }
 
       <MudFlexBreak />
+
+      <ConnectionQualityIndicator />
 
       <MudTooltip Text="Toggle Fullscreen" Placement="Placement.Left" Class="z9002">
         <MudIconButton Icon="@(Icons.Material.Filled.Fullscreen)" Variant="Variant.Outlined" Size="Size.Small"
@@ -60,12 +76,17 @@
          @ontouchcancel="HandleScreenAreaTouchCancel"
          @ontouchend="HandleScreenAreaTouchEnd">
 
-      <canvas id="@_canvasId" @ref="_canvasRef" 
+      <canvas id="@_canvasId" @ref="_canvasRef"
               width="@CanvasWidth" height="@CanvasHeight"
               class='@($"remote-screen {CanvasClasses}")' style="@(CanvasStyle)"
               @onpointermove="HandleCanvasPointerMove"
               @onpointerdown="HandleCanvasPointerDown">
       </canvas>
+
+      <AnnotationCanvas IsActive="_isAnnotationMode"
+                        CanvasWidth="CanvasWidth"
+                        CanvasHeight="CanvasHeight"
+                        CanvasStyle="@(AnnotationCanvasStyle)" />
     </div>
   </div>
 
