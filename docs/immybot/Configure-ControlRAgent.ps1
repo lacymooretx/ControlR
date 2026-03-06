@@ -1,21 +1,16 @@
 <#
 .SYNOPSIS
-    ImmyBot configuration task for ControlR Agent device group assignment.
+    ImmyBot post-install script for ControlR Agent device group assignment.
 .DESCRIPTION
-    Ensures the device is assigned to a ControlR device group matching the
-    tenant name. Gets the tenant name from the ControlR API automatically.
+    Assigns the device to a ControlR device group matching the tenant name.
+    Creates the group if it doesn't exist. Gets the tenant name from the API.
 
-.PARAMETER Method
-    ImmyBot auto-provides: get, test, or set.
 .PARAMETER ControlRServerUrl
     The ControlR server URL.
 .PARAMETER ControlRPersonalAccessToken
     A PAT from a TenantAdministrator user in ControlR.
 #>
 param(
-    [Parameter(Mandatory)]
-    [string]$Method,
-
     [Parameter(Mandatory)]
     [string]$ControlRServerUrl,
 
@@ -47,92 +42,46 @@ function Invoke-ControlRApi {
     Invoke-RestMethod @params
 }
 
-function Find-DeviceInControlR {
-    $computerName = $env:COMPUTERNAME
-    $devices = Invoke-ControlRApi -Endpoint '/api/devices'
-    $devices | Where-Object { $_.name -eq $computerName } | Select-Object -First 1
-}
-
-function Find-GroupByName {
-    param([string]$Name)
-    $groups = Invoke-ControlRApi -Endpoint '/api/device-groups'
-    $groups | Where-Object { $_.name -eq $Name } | Select-Object -First 1
-}
-
-function New-GroupByName {
-    param([string]$Name)
-    $body = @{
-        name        = $Name
-        description = "Auto-created from ControlR tenant: $Name"
-        groupType   = 0
-        sortOrder   = 0
-    } | ConvertTo-Json
-    Invoke-ControlRApi -Endpoint '/api/device-groups' -HttpMethod 'POST' -Body $body
-}
-
 # Get tenant name from the API
 $me = Invoke-ControlRApi -Endpoint '/api/me'
 $TenantName = $me.tenantName
 if (-not $TenantName) {
     Write-Host 'Warning: Tenant name not set in ControlR. Skipping group assignment.'
-    if ($Method -eq 'test') { return $true }
     return
 }
 
-switch ($Method) {
-    'get' {
-        $device = Find-DeviceInControlR
-        if (-not $device) {
-            return @{ Status = 'DeviceNotRegistered'; ComputerName = $env:COMPUTERNAME }
-        }
-        $group = Find-GroupByName -Name $TenantName
-        return @{
-            DeviceId       = $device.id
-            DeviceName     = $device.name
-            CurrentGroupId = $device.deviceGroupId
-            TargetGroupId  = if ($group) { $group.id } else { $null }
-            TargetGroup    = $TenantName
-            InCorrectGroup = ($group -and $device.deviceGroupId -eq $group.id)
-        }
-    }
+# Find device
+$computerName = $env:COMPUTERNAME
+$devices = Invoke-ControlRApi -Endpoint '/api/devices'
+$device = $devices | Where-Object { $_.name -eq $computerName } | Select-Object -First 1
 
-    'test' {
-        $device = Find-DeviceInControlR
-        if (-not $device) {
-            Write-Host "Device '$env:COMPUTERNAME' not registered in ControlR yet."
-            return $true
-        }
-        $group = Find-GroupByName -Name $TenantName
-        if (-not $group) { return $false }
-        if ($device.deviceGroupId -eq $group.id) {
-            Write-Host "Device is in correct group '$TenantName'."
-            return $true
-        }
-        Write-Host "Device not in group '$TenantName'."
-        return $false
-    }
-
-    'set' {
-        $device = Find-DeviceInControlR
-        if (-not $device) {
-            Write-Host "Device '$env:COMPUTERNAME' not registered yet. Will assign on next run."
-            return
-        }
-
-        $group = Find-GroupByName -Name $TenantName
-        if (-not $group) {
-            Write-Host "Creating group '$TenantName'..."
-            $group = New-GroupByName -Name $TenantName
-            Write-Host "Created group (ID: $($group.id))"
-        }
-
-        if ($device.deviceGroupId -eq $group.id) {
-            Write-Host 'Already in correct group.'
-            return
-        }
-
-        Write-Host "Assigning '$($device.name)' to group '$TenantName'..."
-        Invoke-ControlRApi -Endpoint "/api/device-groups/$($device.id)/group" -HttpMethod 'PUT' -Body "`"$($group.id)`""
-        Write-Host 'Done.'
-    }
+if (-not $device) {
+    Write-Host "Device '$computerName' not registered yet. Will assign on next run."
+    return
 }
+
+# Find or create group
+$groups = Invoke-ControlRApi -Endpoint '/api/device-groups'
+$group = $groups | Where-Object { $_.name -eq $TenantName } | Select-Object -First 1
+
+if (-not $group) {
+    Write-Host "Creating group '$TenantName'..."
+    $body = @{
+        name        = $TenantName
+        description = "Auto-created from ControlR tenant: $TenantName"
+        groupType   = 0
+        sortOrder   = 0
+    } | ConvertTo-Json
+    $group = Invoke-ControlRApi -Endpoint '/api/device-groups' -HttpMethod 'POST' -Body $body
+    Write-Host "Created group (ID: $($group.id))"
+}
+
+# Assign device to group
+if ($device.deviceGroupId -eq $group.id) {
+    Write-Host "Device already in correct group '$TenantName'."
+    return
+}
+
+Write-Host "Assigning '$($device.name)' to group '$TenantName'..."
+Invoke-ControlRApi -Endpoint "/api/device-groups/$($device.id)/group" -HttpMethod 'PUT' -Body "`"$($group.id)`""
+Write-Host 'Done.'
