@@ -68,6 +68,7 @@ public class AgentInstallerKeyManager(
   {
     await using var db = await _dbContextFactory.CreateDbContextAsync();
     var installerKey = await db.AgentInstallerKeys
+        .IgnoreQueryFilters()
         .Include(x => x.Usages)
         .FirstOrDefaultAsync(x => x.Id == keyId);
 
@@ -103,7 +104,9 @@ public class AgentInstallerKeyManager(
     }
 
     await using var db = await _dbContextFactory.CreateDbContextAsync();
-    var storedKey = await db.AgentInstallerKeys.FindAsync(keyId);
+    var storedKey = await db.AgentInstallerKeys
+      .IgnoreQueryFilters()
+      .FirstOrDefaultAsync(x => x.Id == keyId);
 
     if (storedKey is null)
     {
@@ -175,6 +178,7 @@ public class AgentInstallerKeyManager(
 
     await using var db = await _dbContextFactory.CreateDbContextAsync();
     var installerKey = await db.AgentInstallerKeys
+      .IgnoreQueryFilters()
       .Include(x => x.Usages)
       .FirstOrDefaultAsync(x => x.Id == keyId);
 
