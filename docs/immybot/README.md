@@ -42,7 +42,6 @@ The install script discovers the tenant ID and creates its own single-use instal
 4. Upload `Configure-ControlRAgent.ps1`, check **Use Script Param Block**
 5. **Map Parameters**:
    - `Method` -> Auto
-   - `TenantName` -> Auto
    - `ControlRServerUrl` -> Configuration Variable
    - `ControlRPersonalAccessToken` -> Configuration Variable
 
@@ -61,15 +60,16 @@ The install script discovers the tenant ID and creates its own single-use instal
 5. Agent registers with server and auto-updates every 6 hours
 
 **Configuration flow (per-run):**
-1. Looks up device in ControlR by `$env:COMPUTERNAME`
-2. Finds or creates a device group matching the ImmyBot tenant name
-3. Assigns the device to that group
+1. Calls `/api/me` to get the tenant name
+2. Looks up device in ControlR by `$env:COMPUTERNAME`
+3. Finds or creates a device group matching the tenant name
+4. Assigns the device to that group
 
 ## API Endpoints Used
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/api/me` | GET | Discover tenant ID from PAT |
+| `/api/me` | GET | Discover tenant ID and name from PAT |
 | `/api/installer-keys` | POST | Create single-use installer key |
 | `/api/devices` | GET | Find device by name |
 | `/api/device-groups` | GET | List groups |

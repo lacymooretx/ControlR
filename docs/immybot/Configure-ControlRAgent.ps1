@@ -3,12 +3,10 @@
     ImmyBot configuration task for ControlR Agent device group assignment.
 .DESCRIPTION
     Ensures the device is assigned to a ControlR device group matching the
-    ImmyBot tenant name. Creates the group if it doesn't exist.
+    tenant name. Gets the tenant name from the ControlR API automatically.
 
 .PARAMETER Method
     ImmyBot auto-provides: get, test, or set.
-.PARAMETER TenantName
-    ImmyBot auto-provides the tenant (client) name.
 .PARAMETER ControlRServerUrl
     The ControlR server URL.
 .PARAMETER ControlRPersonalAccessToken
@@ -17,9 +15,6 @@
 param(
     [Parameter(Mandatory)]
     [string]$Method,
-
-    [Parameter(Mandatory)]
-    [string]$TenantName,
 
     [Parameter(Mandatory)]
     [string]$ControlRServerUrl,
@@ -68,11 +63,20 @@ function New-GroupByName {
     param([string]$Name)
     $body = @{
         name        = $Name
-        description = "Auto-created from ImmyBot tenant: $Name"
+        description = "Auto-created from ControlR tenant: $Name"
         groupType   = 0
         sortOrder   = 0
     } | ConvertTo-Json
     Invoke-ControlRApi -Endpoint '/api/device-groups' -HttpMethod 'POST' -Body $body
+}
+
+# Get tenant name from the API
+$me = Invoke-ControlRApi -Endpoint '/api/me'
+$TenantName = $me.tenantName
+if (-not $TenantName) {
+    Write-Host 'Warning: Tenant name not set in ControlR. Skipping group assignment.'
+    if ($Method -eq 'test') { return $true }
+    return
 }
 
 switch ($Method) {

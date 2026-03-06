@@ -3,18 +3,20 @@
     ImmyBot detection script for ControlR Agent.
 .DESCRIPTION
     Returns the installed version if the ControlR agent is present, or nothing if not.
+    Uses $DetectionString (provided by ImmyBot) to match against uninstall registry entries.
 #>
 
-# Check the uninstall registry key (most reliable -- agent writes DisplayVersion here)
-$uninstallKeys = @(
-    Get-Item 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ControlR' -ErrorAction SilentlyContinue
-    Get-Item 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ControlR (*' -ErrorAction SilentlyContinue
+$uninstallPaths = @(
+    'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+    'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
 )
 
-foreach ($key in $uninstallKeys) {
-    if ($key) {
-        $version = $key.GetValue('DisplayVersion')
-        if ($version) { return $version }
+$entries = Get-ItemProperty $uninstallPaths -ErrorAction SilentlyContinue |
+    Where-Object { $_.DisplayName -like "*$DetectionString*" }
+
+foreach ($entry in $entries) {
+    if ($entry.DisplayVersion) {
+        return $entry.DisplayVersion
     }
 }
 
