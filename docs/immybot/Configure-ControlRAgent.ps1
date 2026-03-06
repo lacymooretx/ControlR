@@ -1,102 +1,87 @@
 <#
 .SYNOPSIS
-    ImmyBot post-install configuration script for ControlR Agent.
+    ImmyBot configuration task for ControlR Agent device group assignment.
 .DESCRIPTION
-    Assigns the device to a ControlR device group matching the ImmyBot tenant name.
-    Creates the group if it doesn't exist. This script calls the ControlR API
-    from the target machine using a Personal Access Token.
-
-    This is a Configuration Task (get/test/set) that ensures the device
-    is in the correct group.
+    Ensures the device is assigned to a ControlR device group matching the
+    ImmyBot tenant name. Creates the group if it doesn't exist.
 
 .PARAMETER Method
     ImmyBot auto-provides: get, test, or set.
+.PARAMETER TenantName
+    ImmyBot auto-provides the tenant (client) name.
 .PARAMETER ControlRServerUrl
     The ControlR server URL.
 .PARAMETER ControlRPersonalAccessToken
-    A PAT from a TenantAdministrator user.
-.PARAMETER TenantName
-    ImmyBot auto-provides the tenant name. Used as the device group name.
+    A PAT from a TenantAdministrator user in ControlR.
 #>
 param(
     [Parameter(Mandatory)]
     [string]$Method,
 
     [Parameter(Mandatory)]
+    [string]$TenantName,
+
+    [Parameter(Mandatory)]
     [string]$ControlRServerUrl,
 
     [Parameter(Mandatory)]
-    [string]$ControlRPersonalAccessToken,
-
-    [Parameter(Mandatory)]
-    [string]$TenantName
+    [string]$ControlRPersonalAccessToken
 )
 
 $ErrorActionPreference = 'Stop'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $ControlRServerUrl = $ControlRServerUrl.TrimEnd('/')
 
 function Invoke-ControlRApi {
     param(
         [string]$Endpoint,
         [string]$HttpMethod = 'GET',
-        [object]$Body = $null
+        [string]$Body = $null
     )
-
-    $headers = @{
-        'x-personal-token' = $ControlRPersonalAccessToken
-        'Content-Type'     = 'application/json'
-        'Accept'           = 'application/json'
-    }
-
     $params = @{
-        Uri     = "$ControlRServerUrl$Endpoint"
-        Method  = $HttpMethod
-        Headers = $headers
+        Uri             = "$ControlRServerUrl$Endpoint"
+        Method          = $HttpMethod
+        Headers         = @{
+            'x-personal-token' = $ControlRPersonalAccessToken
+            'Content-Type'     = 'application/json'
+            'Accept'           = 'application/json'
+        }
         UseBasicParsing = $true
     }
-
-    if ($Body) {
-        $params['Body'] = ($Body | ConvertTo-Json -Depth 10)
-    }
-
+    if ($Body) { $params['Body'] = $Body }
     Invoke-RestMethod @params
 }
 
-function Get-DeviceGroupForTenant {
-    param([string]$GroupName)
-
-    $groups = Invoke-ControlRApi -Endpoint '/api/device-groups'
-    return $groups | Where-Object { $_.name -eq $GroupName } | Select-Object -First 1
-}
-
-function New-DeviceGroupForTenant {
-    param([string]$GroupName)
-
-    return Invoke-ControlRApi -Endpoint '/api/device-groups' -HttpMethod 'POST' -Body @{
-        name        = $GroupName
-        description = "Auto-created from ImmyBot tenant: $GroupName"
-        groupType   = 0
-        sortOrder   = 0
-    }
-}
-
-function Get-ControlRDevice {
+function Find-DeviceInControlR {
     $computerName = $env:COMPUTERNAME
     $devices = Invoke-ControlRApi -Endpoint '/api/devices'
+    $devices | Where-Object { $_.name -eq $computerName } | Select-Object -First 1
+}
 
-    # Match by computer name
-    return $devices | Where-Object { $_.name -eq $computerName } | Select-Object -First 1
+function Find-GroupByName {
+    param([string]$Name)
+    $groups = Invoke-ControlRApi -Endpoint '/api/device-groups'
+    $groups | Where-Object { $_.name -eq $Name } | Select-Object -First 1
+}
+
+function New-GroupByName {
+    param([string]$Name)
+    $body = @{
+        name        = $Name
+        description = "Auto-created from ImmyBot tenant: $Name"
+        groupType   = 0
+        sortOrder   = 0
+    } | ConvertTo-Json
+    Invoke-ControlRApi -Endpoint '/api/device-groups' -HttpMethod 'POST' -Body $body
 }
 
 switch ($Method) {
     'get' {
-        $device = Get-ControlRDevice
+        $device = Find-DeviceInControlR
         if (-not $device) {
-            return @{ Status = 'DeviceNotRegistered' }
+            return @{ Status = 'DeviceNotRegistered'; ComputerName = $env:COMPUTERNAME }
         }
-
-        $group = Get-DeviceGroupForTenant -GroupName $TenantName
-
+        $group = Find-GroupByName -Name $TenantName
         return @{
             DeviceId       = $device.id
             DeviceName     = $device.name
@@ -108,51 +93,42 @@ switch ($Method) {
     }
 
     'test' {
-        $device = Get-ControlRDevice
+        $device = Find-DeviceInControlR
         if (-not $device) {
-            # Device not registered yet -- nothing to configure
-            Write-Host "Device '$env:COMPUTERNAME' not found in ControlR. Skipping group check."
+            Write-Host "Device '$env:COMPUTERNAME' not registered in ControlR yet."
             return $true
         }
-
-        $group = Get-DeviceGroupForTenant -GroupName $TenantName
-        if (-not $group) {
-            # Group doesn't exist yet -- needs creation
-            return $false
-        }
-
+        $group = Find-GroupByName -Name $TenantName
+        if (-not $group) { return $false }
         if ($device.deviceGroupId -eq $group.id) {
             Write-Host "Device is in correct group '$TenantName'."
             return $true
         }
-
-        Write-Host "Device is not in group '$TenantName'. Current group ID: $($device.deviceGroupId)"
+        Write-Host "Device not in group '$TenantName'."
         return $false
     }
 
     'set' {
-        $device = Get-ControlRDevice
+        $device = Find-DeviceInControlR
         if (-not $device) {
-            Write-Host "Device '$env:COMPUTERNAME' not registered in ControlR yet. Group assignment will happen on next run."
+            Write-Host "Device '$env:COMPUTERNAME' not registered yet. Will assign on next run."
             return
         }
 
-        # Find or create the group
-        $group = Get-DeviceGroupForTenant -GroupName $TenantName
+        $group = Find-GroupByName -Name $TenantName
         if (-not $group) {
-            Write-Host "Creating device group '$TenantName'..."
-            $group = New-DeviceGroupForTenant -GroupName $TenantName
-            Write-Host "Created group '$TenantName' (ID: $($group.id))"
+            Write-Host "Creating group '$TenantName'..."
+            $group = New-GroupByName -Name $TenantName
+            Write-Host "Created group (ID: $($group.id))"
         }
 
         if ($device.deviceGroupId -eq $group.id) {
-            Write-Host "Device already in correct group."
+            Write-Host 'Already in correct group.'
             return
         }
 
-        # Assign device to group
-        Write-Host "Assigning device '$($device.name)' to group '$TenantName'..."
+        Write-Host "Assigning '$($device.name)' to group '$TenantName'..."
         Invoke-ControlRApi -Endpoint "/api/device-groups/$($device.id)/group" -HttpMethod 'PUT' -Body "`"$($group.id)`""
-        Write-Host "Device assigned to group '$TenantName' successfully."
+        Write-Host 'Done.'
     }
 }

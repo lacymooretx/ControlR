@@ -2,10 +2,10 @@
 .SYNOPSIS
     ImmyBot uninstall script for ControlR Agent.
 .DESCRIPTION
-    Uninstalls the ControlR agent by running its built-in uninstall command.
+    Finds and runs the agent's built-in uninstall command.
 
 .PARAMETER ControlRServerUrl
-    The ControlR server URL. Used to determine instance ID for multi-instance installs.
+    The ControlR server URL. Used to determine the instance ID.
 #>
 param(
     [Parameter(Mandatory)]
@@ -13,34 +13,28 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$ControlRServerUrl = $ControlRServerUrl.TrimEnd('/')
+$instanceId = ([System.Uri]$ControlRServerUrl.TrimEnd('/')).Authority
 
-$instanceId = ([System.Uri]$ControlRServerUrl).Authority
-
-# Find the agent executable from the install directory
-$installDirs = @(
-    (Join-Path $env:ProgramFiles "ControlR\$instanceId"),
-    (Join-Path $env:ProgramFiles 'ControlR')
+# Find the agent binary
+$agentExe = $null
+$candidates = @(
+    (Join-Path $env:ProgramFiles "ControlR\$instanceId\ControlR.Agent.exe"),
+    (Join-Path $env:ProgramFiles 'ControlR\ControlR.Agent.exe')
 )
 
-$agentExe = $null
-foreach ($dir in $installDirs) {
-    $candidate = Join-Path $dir 'ControlR.Agent.exe'
-    if (Test-Path $candidate) {
-        $agentExe = $candidate
-        break
-    }
+foreach ($path in $candidates) {
+    if (Test-Path $path) { $agentExe = $path; break }
 }
 
+# Fallback: get path from service config
 if (-not $agentExe) {
-    # Try getting path from the service
-    $service = Get-Service -Name 'ControlR.Agent*' -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($service) {
-        $scOutput = sc.exe qc $service.Name 2>$null
-        $binPath = ($scOutput | Where-Object { $_ -match 'BINARY_PATH_NAME' }) -replace '.*:\s*', '' -replace '"', ''
-        $exePath = ($binPath -split '\s+' | Select-Object -First 1).Trim()
-        if ($exePath -and (Test-Path $exePath)) {
-            $agentExe = $exePath
+    $svc = Get-Service -Name 'ControlR.Agent*' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($svc) {
+        $scOutput = sc.exe qc $svc.Name 2>$null
+        $binLine = $scOutput | Where-Object { $_ -match 'BINARY_PATH_NAME' }
+        if ($binLine) {
+            $exe = (($binLine -replace '.*:\s*', '') -replace '"', '' -split '\s+')[0].Trim()
+            if ($exe -and (Test-Path $exe)) { $agentExe = $exe }
         }
     }
 }
@@ -50,23 +44,19 @@ if (-not $agentExe) {
     return
 }
 
-# Run the built-in uninstall command
 $uninstallArgs = "uninstall"
-if ($instanceId) {
-    $uninstallArgs += " -i $instanceId"
+if ($instanceId) { $uninstallArgs += " -i $instanceId" }
+
+Write-Host "Uninstalling: $agentExe $uninstallArgs"
+$proc = Start-Process -FilePath $agentExe -ArgumentList $uninstallArgs -Wait -PassThru -NoNewWindow
+if ($proc.ExitCode -ne 0) {
+    Write-Host "Warning: uninstall exited with code $($proc.ExitCode)"
 }
 
-Write-Host "Uninstalling ControlR agent: $agentExe $uninstallArgs"
-$process = Start-Process -FilePath $agentExe -ArgumentList $uninstallArgs -Wait -PassThru -NoNewWindow
-if ($process.ExitCode -ne 0) {
-    Write-Host "Warning: Uninstall exited with code $($process.ExitCode)"
-}
-
-# Verify removal
 Start-Sleep -Seconds 3
-$service = Get-Service -Name 'ControlR.Agent*' -ErrorAction SilentlyContinue
-if (-not $service) {
-    Write-Host 'ControlR agent uninstalled successfully.'
+$svc = Get-Service -Name 'ControlR.Agent*' -ErrorAction SilentlyContinue
+if (-not $svc) {
+    Write-Host 'Agent uninstalled successfully.'
 } else {
-    Write-Host "Warning: Service '$($service.Name)' still exists (status: $($service.Status)). A reboot may be required."
+    Write-Host "Warning: service still exists (status: $($svc.Status)). Reboot may be required."
 }

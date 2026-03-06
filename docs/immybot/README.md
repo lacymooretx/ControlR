@@ -1,81 +1,77 @@
 # ImmyBot ControlR Agent Deployment
 
-Deploy the ControlR agent to managed endpoints via ImmyBot, with automatic device group creation per tenant.
+Deploy the ControlR agent via ImmyBot with automatic tenant-based device groups.
 
 ## Scripts
 
 | Script | Type | Purpose |
 |--------|------|---------|
 | `Detect-ControlRAgent.ps1` | Detection | Returns installed version or `$null` |
-| `Install-ControlRAgent.ps1` | Install | Downloads and installs the agent |
-| `Uninstall-ControlRAgent.ps1` | Uninstall | Runs the agent's built-in uninstall |
-| `Configure-ControlRAgent.ps1` | Configuration Task | Assigns device to tenant-named group |
+| `Install-ControlRAgent.ps1` | Install | Creates installer key via API, downloads and installs agent |
+| `Uninstall-ControlRAgent.ps1` | Uninstall | Runs agent's built-in uninstall |
+| `Configure-ControlRAgent.ps1` | Configuration Task | Creates/assigns device group per tenant |
 
-## Auto-Update
-
-The agent checks for updates every 6 hours (SHA256 hash comparison). No additional ImmyBot task needed.
-
-## Prerequisites
-
-### In ControlR (https://control.aspendora.com)
-
-1. **Create a Persistent Installer Key** -- Deploy page > Persistent > Generate Key. Save the **Key ID** and **Key Secret**.
-2. **Create a Personal Access Token** -- Settings > Personal Access Tokens. Needs TenantAdministrator role. Used by the configuration script to manage groups.
-3. **Note your Tenant ID** -- visible on the Deploy page.
-
-### In ImmyBot
-
-#### Step 1: Configuration Variables
-
-**Admin** > **Configuration Variables**:
+## Configuration Variables (only 2 needed)
 
 | Variable | Type | Value |
 |----------|------|-------|
 | `ControlRServerUrl` | Text | `https://control.aspendora.com` |
-| `ControlRTenantId` | Text | Your tenant GUID |
-| `ControlRInstallerKeyId` | Text | Installer key ID |
-| `ControlRInstallerKeySecret` | Text (Secret) | Installer key secret |
-| `ControlRPersonalAccessToken` | Text (Secret) | PAT token |
+| `ControlRPersonalAccessToken` | Text (Secret) | PAT from a TenantAdministrator |
 
-#### Step 2: Create Software Entry
+The install script discovers the tenant ID and creates its own single-use installer key via the API. No manual key management needed.
+
+## Setup
+
+### 1. Create Software Entry
 
 1. **Software** > **+ New Software**
 2. **Name**: `ControlR Agent`
-3. **Detection**: Upload `Detect-ControlRAgent.ps1`
-4. **Install**: Upload `Install-ControlRAgent.ps1`
-   - Map parameters: `ControlRServerUrl`, `ControlRTenantId`, `ControlRInstallerKeyId`, `ControlRInstallerKeySecret`
-5. **Uninstall**: Upload `Uninstall-ControlRAgent.ps1`
-   - Map parameter: `ControlRServerUrl`
-6. **Desired State**: Latest (use `1.0.0` or match your server version)
+3. **Detection**: `Detect-ControlRAgent.ps1` (no parameters)
+4. **Install**: `Install-ControlRAgent.ps1`
+   - `ControlRServerUrl` -> Configuration Variable
+   - `ControlRPersonalAccessToken` -> Configuration Variable
+5. **Uninstall**: `Uninstall-ControlRAgent.ps1`
+   - `ControlRServerUrl` -> Configuration Variable
+6. **Desired State**: Latest (`1.0.0`)
 
-#### Step 3: Create Configuration Task (Group Assignment)
+### 2. Create Configuration Task
 
 1. **Maintenance** > **Tasks** > **+ New Task**
 2. **Name**: `ControlR Device Group Assignment`
 3. **Task Type**: Configuration Task
-4. Upload `Configure-ControlRAgent.ps1`
-5. Check **Use Script Param Block**
-6. **Map Parameters**:
+4. Upload `Configure-ControlRAgent.ps1`, check **Use Script Param Block**
+5. **Map Parameters**:
    - `Method` -> Auto
    - `TenantName` -> Auto
    - `ControlRServerUrl` -> Configuration Variable
    - `ControlRPersonalAccessToken` -> Configuration Variable
 
-#### Step 4: Deploy
+### 3. Deploy
 
-1. **Deployments** > **+ New Deployment**
-2. **Software**: ControlR Agent
-3. **Target**: Cross-tenant (all tenants) or specific tenants
-4. **Desired State**: Latest
+- Create a cross-tenant deployment for the software
+- Schedule the configuration task on all computers
 
-Then add the Configuration Task to a maintenance schedule targeting all computers.
+## How It Works
 
-## Device Group Mapping
+**Install flow:**
+1. Calls `/api/me` with PAT to get tenant ID
+2. Creates a single-use installer key via `/api/installer-keys`
+3. Downloads agent binary from server
+4. Runs `ControlR.Agent.exe install` with tenant/key args
+5. Agent registers with server and auto-updates every 6 hours
 
-| ImmyBot Tenant | ControlR Device Group |
-|----------------|----------------------|
-| Acme Corp | Acme Corp |
-| Contoso Ltd | Contoso Ltd |
-| (new tenant) | (auto-created on first config run) |
+**Configuration flow (per-run):**
+1. Looks up device in ControlR by `$env:COMPUTERNAME`
+2. Finds or creates a device group matching the ImmyBot tenant name
+3. Assigns the device to that group
 
-Groups get description "Auto-created from ImmyBot tenant: {name}".
+## API Endpoints Used
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/me` | GET | Discover tenant ID from PAT |
+| `/api/installer-keys` | POST | Create single-use installer key |
+| `/api/devices` | GET | Find device by name |
+| `/api/device-groups` | GET | List groups |
+| `/api/device-groups` | POST | Create group |
+| `/api/device-groups/{deviceId}/group` | PUT | Assign device to group |

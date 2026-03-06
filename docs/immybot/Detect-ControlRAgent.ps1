@@ -2,46 +2,35 @@
 .SYNOPSIS
     ImmyBot detection script for ControlR Agent.
 .DESCRIPTION
-    Returns the installed version if the ControlR agent is installed, or nothing if not.
-    ImmyBot uses this to determine if installation/update is needed.
+    Returns the installed version if the ControlR agent is present, or nothing if not.
 #>
 
-# Check the uninstall registry key first (most reliable)
-$uninstallPaths = @(
-    'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ControlR',
-    'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ControlR (*)'
+# Check the uninstall registry key (most reliable -- agent writes DisplayVersion here)
+$uninstallKeys = @(
+    Get-Item 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ControlR' -ErrorAction SilentlyContinue
+    Get-Item 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ControlR (*' -ErrorAction SilentlyContinue
 )
 
-foreach ($path in $uninstallPaths) {
-    $keys = Get-Item -Path $path -ErrorAction SilentlyContinue
-    if ($keys) {
-        foreach ($key in @($keys)) {
-            $version = $key.GetValue('DisplayVersion')
-            if ($version) {
-                return $version
-            }
-        }
+foreach ($key in $uninstallKeys) {
+    if ($key) {
+        $version = $key.GetValue('DisplayVersion')
+        if ($version) { return $version }
     }
 }
 
-# Fallback: check the service and binary directly
+# Fallback: check service binary version
 $service = Get-Service -Name 'ControlR.Agent*' -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($service) {
-    # Try to get version from the binary
     $scOutput = sc.exe qc $service.Name 2>$null
-    $binPath = ($scOutput | Where-Object { $_ -match 'BINARY_PATH_NAME' }) -replace '.*:\s*', '' -replace '"', ''
-    $exePath = ($binPath -split '\s+' | Select-Object -First 1).Trim()
-
-    if ($exePath -and (Test-Path $exePath)) {
-        $fileVersion = (Get-Item $exePath).VersionInfo.FileVersion
-        if ($fileVersion) {
-            return $fileVersion
+    $binLine = $scOutput | Where-Object { $_ -match 'BINARY_PATH_NAME' }
+    if ($binLine) {
+        $exePath = (($binLine -replace '.*:\s*', '') -replace '"', '' -split '\s+')[0].Trim()
+        if ($exePath -and (Test-Path $exePath)) {
+            $v = (Get-Item $exePath).VersionInfo.FileVersion
+            if ($v) { return $v }
         }
     }
-
-    # Service exists but can't determine version
     return '0.0.0'
 }
 
-# Not installed
 return $null
