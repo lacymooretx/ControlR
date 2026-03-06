@@ -119,39 +119,45 @@ internal class DisplayManagerWindows(
           devMode.dmFields |= DEVMODE_FIELD_FLAGS.DM_DISPLAYFREQUENCY;
         }
 
-        // Test first (CDS_TEST = 0x00000002)
-        var testResult = PInvoke.ChangeDisplaySettingsEx(
-          displayId,
-          &devMode,
-          HWND.Null,
-          (uint)2,
-          (void*)null);
-
-        if (testResult != DISP_CHANGE.DISP_CHANGE_SUCCESSFUL)
+        // Test first
+        fixed (char* pName = displayId)
         {
-          var errorMsg = testResult switch
+          var testResult = PInvoke.ChangeDisplaySettingsEx(
+            new PCWSTR(pName),
+            &devMode,
+            HWND.Null,
+            CDS_TYPE.CDS_TEST,
+            (void*)null);
+
+          if (testResult != DISP_CHANGE.DISP_CHANGE_SUCCESSFUL)
           {
-            DISP_CHANGE.DISP_CHANGE_BADMODE => "The resolution is not supported by this display.",
-            DISP_CHANGE.DISP_CHANGE_BADPARAM => "Invalid parameter.",
-            DISP_CHANGE.DISP_CHANGE_FAILED => "The display driver failed the request.",
-            DISP_CHANGE.DISP_CHANGE_NOTUPDATED => "Unable to write settings to the registry.",
-            DISP_CHANGE.DISP_CHANGE_RESTART => "A restart is required for this resolution change.",
-            _ => $"ChangeDisplaySettingsEx test failed with code {testResult}."
-          };
-          return Task.FromResult(Result.Fail(errorMsg));
+            var errorMsg = testResult switch
+            {
+              DISP_CHANGE.DISP_CHANGE_BADMODE => "The resolution is not supported by this display.",
+              DISP_CHANGE.DISP_CHANGE_BADPARAM => "Invalid parameter.",
+              DISP_CHANGE.DISP_CHANGE_FAILED => "The display driver failed the request.",
+              DISP_CHANGE.DISP_CHANGE_NOTUPDATED => "Unable to write settings to the registry.",
+              DISP_CHANGE.DISP_CHANGE_RESTART => "A restart is required for this resolution change.",
+              _ => $"ChangeDisplaySettingsEx test failed with code {testResult}."
+            };
+            return Task.FromResult(Result.Fail(errorMsg));
+          }
         }
 
-        // Apply the change dynamically (0 = session-scoped, no registry write)
-        var applyResult = PInvoke.ChangeDisplaySettingsEx(
-          displayId,
-          &devMode,
-          HWND.Null,
-          (uint)0,
-          (void*)null);
-
-        if (applyResult != DISP_CHANGE.DISP_CHANGE_SUCCESSFUL)
+        // Apply the change dynamically (session-scoped, no registry write)
+        fixed (char* pName2 = displayId)
         {
-          return Task.FromResult(Result.Fail($"ChangeDisplaySettingsEx failed with code {applyResult}."));
+          var applyResult = PInvoke.ChangeDisplaySettingsEx(
+            new PCWSTR(pName2),
+            &devMode,
+            HWND.Null,
+            (CDS_TYPE)0,
+            (void*)null);
+
+          if (applyResult != DISP_CHANGE.DISP_CHANGE_SUCCESSFUL)
+          {
+            return Task.FromResult(Result.Fail($"ChangeDisplaySettingsEx failed with code {applyResult}."));
+          }
         }
 
         _logger.LogInformation(
