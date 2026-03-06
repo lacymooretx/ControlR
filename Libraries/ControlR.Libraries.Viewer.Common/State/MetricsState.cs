@@ -2,7 +2,7 @@ using ControlR.Libraries.Shared.Services.StateManagement;
 
 namespace ControlR.Libraries.Viewer.Common.State;
 
-public interface IMetricsState
+public interface IMetricsState : IStateBase
 {
   TimeSpan CurrentLatency { get; set; }
   CaptureMetricsDto? CurrentMetrics { get; set; }
