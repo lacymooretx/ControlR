@@ -60,16 +60,16 @@ $keySecret = $keyResponse.keySecret
 Write-Host "Installer key created: $keyId"
 
 # 3. Download agent
-$arch = if ([Environment]::Is64BitOperatingSystem) { 'win-x64' } else { 'win-x86' }
+$arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'AMD64') { 'win-x64' } else { 'win-x86' }
 $downloadUrl = "$ControlRServerUrl/downloads/$arch/ControlR.Agent.exe"
 $tempPath = Join-Path $env:TEMP 'ControlR.Agent.exe'
 Write-Host "Downloading agent from $downloadUrl..."
-(New-Object Net.WebClient).DownloadFile($downloadUrl, $tempPath)
+Invoke-WebRequest -Uri $downloadUrl -OutFile $tempPath -UseBasicParsing
 if (-not (Test-Path $tempPath)) { throw 'Download failed' }
-Write-Host "Downloaded $([math]::Round((Get-Item $tempPath).Length / 1MB, 1)) MB"
+Write-Host "Downloaded to $tempPath"
 
 # 4. Install
-$instanceId = ([System.Uri]$ControlRServerUrl).Authority
+$instanceId = ($ControlRServerUrl -replace '^https?://', '' -replace '/.*$', '')
 $installArgs = "install -s $ControlRServerUrl -i $instanceId -t $tenantId -ks $keySecret -ki $keyId"
 Write-Host 'Installing agent...'
 $proc = Start-Process -FilePath $tempPath -ArgumentList $installArgs -Wait -PassThru -NoNewWindow

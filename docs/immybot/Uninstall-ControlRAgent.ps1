@@ -13,7 +13,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$instanceId = ([System.Uri]$ControlRServerUrl.TrimEnd('/')).Authority
+$trimmed = $ControlRServerUrl.TrimEnd('/')
+$instanceId = ($trimmed -replace '^https?://', '' -replace '/.*$', '')
 
 # Find the agent binary
 $agentExe = $null
