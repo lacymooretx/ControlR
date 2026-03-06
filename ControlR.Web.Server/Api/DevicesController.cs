@@ -242,6 +242,17 @@ public class DevicesController : ControllerBase
     {
       return false;
     }
-    return entity.AgentVersion != agentVersionResult.Value.ToString();
+
+    if (!Version.TryParse(entity.AgentVersion, out var deviceVersion))
+    {
+      return true;
+    }
+
+    var serverVersion = agentVersionResult.Value;
+
+    // Compare only Major.Minor.Build to handle 3-part vs 4-part version mismatches.
+    return deviceVersion.Major != serverVersion.Major
+      || deviceVersion.Minor != serverVersion.Minor
+      || deviceVersion.Build != serverVersion.Build;
   }
 }
