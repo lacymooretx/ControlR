@@ -119,12 +119,12 @@ internal class DisplayManagerWindows(
           devMode.dmFields |= DEVMODE_FIELD_FLAGS.DM_DISPLAYFREQUENCY;
         }
 
-        // Test first
+        // Test first (CDS_TEST = 0x00000002)
         var testResult = PInvoke.ChangeDisplaySettingsEx(
           displayId,
           &devMode,
           HWND.Null,
-          CHANGE_DISPLAY_SETTINGS_FLAGS.CDS_TEST,
+          (uint)2,
           (void*)null);
 
         if (testResult != DISP_CHANGE.DISP_CHANGE_SUCCESSFUL)
@@ -141,12 +141,12 @@ internal class DisplayManagerWindows(
           return Task.FromResult(Result.Fail(errorMsg));
         }
 
-        // Apply the change dynamically (session-scoped, no registry write)
+        // Apply the change dynamically (0 = session-scoped, no registry write)
         var applyResult = PInvoke.ChangeDisplaySettingsEx(
           displayId,
           &devMode,
           HWND.Null,
-          (CHANGE_DISPLAY_SETTINGS_FLAGS)0,
+          (uint)0,
           (void*)null);
 
         if (applyResult != DISP_CHANGE.DISP_CHANGE_SUCCESSFUL)
