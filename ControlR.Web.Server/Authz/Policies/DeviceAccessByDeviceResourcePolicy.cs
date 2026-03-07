@@ -19,6 +19,12 @@ public static class DeviceAccessByDeviceResourcePolicy
           return Fail("Resource must be a device.", handlerCtx, authzHandler, logger);
         }
 
+        // ServerAdministrator can access devices in any tenant
+        if (handlerCtx.User.IsInRole(RoleNames.ServerAdministrator))
+        {
+          return true;
+        }
+
         if (!handlerCtx.User.TryGetTenantId(out var tenantId))
         {
           return Fail("Tenant ID claim is missing.", handlerCtx, authzHandler, logger);

@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.SignalR.Client;
+﻿using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.SignalR.Client;
 using System.Collections.Immutable;
 using System.Runtime.Versioning;
 
@@ -18,6 +19,7 @@ public partial class Dashboard
   private MudDataGrid<DeviceViewModel>? _dataGrid;
   private bool _hideOfflineDevices;
   private bool _isMobileView;
+  private bool _isServerAdmin;
   private bool _loading = true;
   private int _rowsPerPage = 25;
   private string? _searchText;
@@ -57,6 +59,9 @@ public partial class Dashboard
   public required IUserTagStore UserTagStore { get; init; }
 
   [Inject]
+  public required AuthenticationStateProvider AuthState { get; init; }
+
+  [Inject]
   public required IActionVerificationGuard VerificationGuard { get; init; }
 
   [Inject]
@@ -70,6 +75,9 @@ public partial class Dashboard
     await base.OnInitializedAsync();
 
     _hideOfflineDevices = await Settings.GetHideOfflineDevices();
+
+    var authState = await AuthState.GetAuthenticationStateAsync();
+    _isServerAdmin = authState.User.IsInRole(RoleNames.ServerAdministrator);
 
     var breakpoint = await BrowserViewport.GetCurrentBreakpointAsync();
     _isMobileView = breakpoint <= Breakpoint.Sm;

@@ -41,6 +41,8 @@ public record DeviceResponseDto(
 
   public string? DeviceGroupName { get; init; }
 
+  public string? TenantName { get; init; }
+
   public ImmutableArray<Guid>? TagIds { get; set; }
 
   [IgnoreDataMember]

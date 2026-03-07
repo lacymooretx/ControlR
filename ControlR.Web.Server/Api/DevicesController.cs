@@ -168,11 +168,18 @@ public class DevicesController : ControllerBase
     [FromServices] ILogger<DevicesController> logger)
   {
     var isRelationalDatabase = appDb.Database.IsRelational();
-    // Start with all devices
-    var anyDevices = await appDb.Devices.AnyAsync();
-    var query = appDb.Devices
+    var isServerAdmin = User.IsInRole(RoleNames.ServerAdministrator);
+
+    // Start with all devices; ServerAdmin sees across all tenants
+    var devicesQuery = isServerAdmin
+      ? appDb.Devices.IgnoreQueryFilters()
+      : appDb.Devices;
+
+    var anyDevices = await devicesQuery.AnyAsync();
+    var query = devicesQuery
       .Include(x => x.DeviceGroup)
       .Include(x => x.Tags)
+      .Include(x => x.Tenant)
       .AsSplitQuery()
       .OrderBy(x => x.CreatedAt)
       .AsQueryable();

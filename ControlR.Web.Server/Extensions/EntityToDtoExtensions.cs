@@ -122,7 +122,8 @@ public static class EntityToDtoExtensions
       Alias = device.Alias,
       DeviceGroupId = device.DeviceGroupId,
       DeviceGroupName = device.DeviceGroup?.Name,
-      TagIds = device.Tags?.Select(x => x.Id).ToImmutableArray()
+      TagIds = device.Tags?.Select(x => x.Id).ToImmutableArray(),
+      TenantName = device.Tenant?.Name
     };
   }
   public static JitAdminAccountDto ToDto(this JitAdminAccount account)

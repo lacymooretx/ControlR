@@ -124,6 +124,11 @@
 
       </PropertyColumn>
 
+      @if (_isServerAdmin)
+      {
+        <PropertyColumn Property="@(x => x.Dto.TenantName)" Sortable="true" Filterable="true" Title="Tenant" />
+      }
+
       <PropertyColumn Property="@(x => x.Dto.IsOnline)" Sortable="true" Filterable="true" Title="Online">
         <CellTemplate>
           @if (context.Item.Dto.IsOnline)
