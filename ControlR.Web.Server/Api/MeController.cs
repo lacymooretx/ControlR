@@ -34,6 +34,58 @@ public class MeController : ControllerBase
   }
 }
 
+/// <summary>
+/// One-time bootstrap endpoint to create a PAT for the first ServerAdministrator.
+/// Protected by a shared secret passed as query parameter.
+/// Remove this endpoint after initial setup.
+/// </summary>
+[Route("api/bootstrap-pat")]
+[ApiController]
+public class BootstrapPatController : ControllerBase
+{
+  [HttpPost]
+  [AllowAnonymous]
+  public async Task<ActionResult> CreateBootstrapPat(
+    [FromQuery] string secret,
+    [FromServices] AppDb appDb,
+    [FromServices] UserManager<AppUser> userManager,
+    [FromServices] IPersonalAccessTokenManager patManager,
+    [FromServices] IConfiguration configuration)
+  {
+    var bootstrapSecret = configuration["BootstrapPatSecret"];
+    if (string.IsNullOrWhiteSpace(bootstrapSecret) || secret != bootstrapSecret)
+    {
+      return NotFound();
+    }
+
+    var adminUser = await appDb.Users
+      .IgnoreQueryFilters()
+      .FirstOrDefaultAsync();
+
+    if (adminUser is null)
+    {
+      return BadRequest("No users found");
+    }
+
+    var isAdmin = await userManager.IsInRoleAsync(adminUser, RoleNames.ServerAdministrator);
+    if (!isAdmin)
+    {
+      return BadRequest("First user is not a server administrator");
+    }
+
+    var result = await patManager.CreateToken(
+      new CreatePersonalAccessTokenRequestDto("Bootstrap-ServerAdmin"),
+      adminUser.Id);
+
+    if (!result.IsSuccess)
+    {
+      return BadRequest(result.Reason);
+    }
+
+    return Ok(new { token = result.Value.PlainTextToken });
+  }
+}
+
 public record MeResponseDto(
   Guid UserId,
   string? UserName,
