@@ -124,8 +124,8 @@ public class TenantsController : ControllerBase
   }
 
   /// <summary>
-  /// Idempotent provisioning endpoint. Creates tenant + admin user + PAT if they don't exist.
-  /// Returns existing resources if they do.
+  /// Idempotent provisioning endpoint. Finds or creates a tenant by name.
+  /// Optionally creates an admin user and PAT if AdminEmail is provided.
   /// </summary>
   [HttpPost("provision")]
   public async Task<ActionResult<ProvisionTenantResponseDto>> Provision(
@@ -139,6 +139,9 @@ public class TenantsController : ControllerBase
     var tenantCreated = false;
     var userCreated = false;
     var patCreated = false;
+    Guid? userId = null;
+    string? adminEmail = null;
+    string? plainTextToken = null;
 
     // 1. Find or create tenant by name
     var tenant = await appDb.Tenants
@@ -154,77 +157,168 @@ public class TenantsController : ControllerBase
       logger.LogInformation("Provisioned new tenant '{TenantName}' (ID: {TenantId}).", request.TenantName, tenant.Id);
     }
 
-    // 2. Find or create admin user in this tenant
-    var normalizedEmail = request.AdminEmail.Trim().ToLowerInvariant();
-    var user = await appDb.Users
-      .IgnoreQueryFilters()
-      .FirstOrDefaultAsync(u => u.NormalizedEmail == normalizedEmail.ToUpperInvariant());
-
-    if (user is not null && user.TenantId != tenant.Id)
+    // 2. If AdminEmail provided, find or create admin user + PAT
+    if (!string.IsNullOrWhiteSpace(request.AdminEmail))
     {
-      return Conflict($"User '{normalizedEmail}' already exists in a different tenant.");
-    }
+      adminEmail = request.AdminEmail.Trim().ToLowerInvariant();
+      var user = await appDb.Users
+        .IgnoreQueryFilters()
+        .FirstOrDefaultAsync(u => u.NormalizedEmail == adminEmail.ToUpperInvariant());
 
-    if (user is null)
-    {
-      var password = request.AdminPassword ?? RandomGenerator.CreateAccessToken()[..16];
-      var createResult = await userCreator.CreateUser(normalizedEmail, password, tenant.Id);
-
-      if (!createResult.Succeeded)
+      if (user is not null && user.TenantId != tenant.Id)
       {
-        var errors = string.Join("; ", createResult.IdentityResult.Errors.Select(e => e.Description));
-        return BadRequest($"Failed to create user: {errors}");
+        return Conflict($"User '{adminEmail}' already exists in a different tenant.");
       }
 
-      user = createResult.User!;
+      if (user is null)
+      {
+        var password = request.AdminPassword ?? RandomGenerator.CreateAccessToken()[..16];
+        var createResult = await userCreator.CreateUser(adminEmail, password, tenant.Id);
 
-      // Assign tenant admin roles
-      await userManager.AddToRoleAsync(user, RoleNames.TenantAdministrator);
-      await userManager.AddToRoleAsync(user, RoleNames.DeviceSuperUser);
-      await userManager.AddToRoleAsync(user, RoleNames.AgentInstaller);
-      await userManager.AddToRoleAsync(user, RoleNames.InstallerKeyManager);
+        if (!createResult.Succeeded)
+        {
+          var errors = string.Join("; ", createResult.IdentityResult.Errors.Select(e => e.Description));
+          return BadRequest($"Failed to create user: {errors}");
+        }
 
-      userCreated = true;
-      logger.LogInformation("Provisioned admin user '{Email}' in tenant '{TenantName}'.", normalizedEmail, request.TenantName);
+        user = createResult.User!;
+
+        await userManager.AddToRoleAsync(user, RoleNames.TenantAdministrator);
+        await userManager.AddToRoleAsync(user, RoleNames.DeviceSuperUser);
+        await userManager.AddToRoleAsync(user, RoleNames.AgentInstaller);
+        await userManager.AddToRoleAsync(user, RoleNames.InstallerKeyManager);
+
+        userCreated = true;
+        logger.LogInformation("Provisioned admin user '{Email}' in tenant '{TenantName}'.", adminEmail, request.TenantName);
+      }
+
+      userId = user.Id;
+
+      // Replace any existing provisioned PAT (can't retrieve plaintext of old one)
+      var provisionPat = await appDb.PersonalAccessTokens
+        .IgnoreQueryFilters()
+        .FirstOrDefaultAsync(p => p.UserId == user.Id && p.Name.StartsWith("Provisioned-"));
+
+      if (provisionPat is not null)
+      {
+        appDb.PersonalAccessTokens.Remove(provisionPat);
+        await appDb.SaveChangesAsync();
+      }
+
+      var patResult = await patManager.CreateToken(
+        new CreatePersonalAccessTokenRequestDto($"Provisioned-{request.TenantName}"),
+        user.Id);
+
+      if (!patResult.IsSuccess)
+      {
+        return BadRequest($"Failed to create PAT: {patResult.Reason}");
+      }
+
+      plainTextToken = patResult.Value.PlainTextToken;
+      patCreated = true;
     }
-
-    // 3. Find existing PAT or create a new one
-    var existingPats = await appDb.PersonalAccessTokens
-      .IgnoreQueryFilters()
-      .Where(p => p.UserId == user.Id)
-      .ToListAsync();
-
-    string plainTextToken;
-
-    var provisionPat = existingPats.FirstOrDefault(p => p.Name.StartsWith("Provisioned-"));
-
-    if (provisionPat is not null && !patCreated)
-    {
-      // PAT exists but we can't retrieve the plaintext. Create a new one and delete the old.
-      appDb.PersonalAccessTokens.Remove(provisionPat);
-      await appDb.SaveChangesAsync();
-    }
-
-    var patResult = await patManager.CreateToken(
-      new CreatePersonalAccessTokenRequestDto($"Provisioned-{request.TenantName}"),
-      user.Id);
-
-    if (!patResult.IsSuccess)
-    {
-      return BadRequest($"Failed to create PAT: {patResult.Reason}");
-    }
-
-    plainTextToken = patResult.Value.PlainTextToken;
-    patCreated = true;
 
     return Ok(new ProvisionTenantResponseDto(
       tenant.Id,
       request.TenantName,
-      user.Id,
-      normalizedEmail,
-      plainTextToken,
       tenantCreated,
+      userId,
+      adminEmail,
+      plainTextToken,
       userCreated,
       patCreated));
+  }
+
+  /// <summary>
+  /// Find a device by name across all tenants. Used by ImmyBot metascript
+  /// to locate a device before reassigning it to the correct tenant.
+  /// </summary>
+  [HttpGet("devices")]
+  public async Task<ActionResult<DeviceResponseDto>> FindDeviceByName(
+    [FromQuery] string name,
+    [FromServices] AppDb appDb)
+  {
+    if (string.IsNullOrWhiteSpace(name))
+    {
+      return BadRequest("Device name is required.");
+    }
+
+    var device = await appDb.Devices
+      .IgnoreQueryFilters()
+      .FirstOrDefaultAsync(d => d.Name == name);
+
+    if (device is null)
+    {
+      return NotFound($"Device '{name}' not found.");
+    }
+
+    return Ok(device.ToDto(isOutdated: false));
+  }
+
+  /// <summary>
+  /// Reassign a device to a different tenant.
+  /// </summary>
+  [HttpPut("devices/{deviceId:guid}/tenant")]
+  public async Task<ActionResult<ReassignDeviceTenantResponseDto>> ReassignDeviceTenant(
+    [FromRoute] Guid deviceId,
+    [FromBody] ReassignDeviceTenantRequestDto request,
+    [FromServices] AppDb appDb,
+    [FromServices] ILogger<TenantsController> logger)
+  {
+    var device = await appDb.Devices
+      .IgnoreQueryFilters()
+      .FirstOrDefaultAsync(d => d.Id == deviceId);
+
+    if (device is null)
+    {
+      return NotFound("Device not found.");
+    }
+
+    var newTenant = await appDb.Tenants
+      .IgnoreQueryFilters()
+      .AnyAsync(t => t.Id == request.NewTenantId);
+
+    if (!newTenant)
+    {
+      return BadRequest("Target tenant not found.");
+    }
+
+    var previousTenantId = device.TenantId;
+
+    if (previousTenantId == request.NewTenantId)
+    {
+      return Ok(new ReassignDeviceTenantResponseDto(
+        device.Id, device.Name, previousTenantId, request.NewTenantId));
+    }
+
+    device.TenantId = request.NewTenantId;
+
+    // Clear device group assignment (groups are tenant-scoped)
+    device.DeviceGroupId = null;
+
+    // Move related tenant-scoped records
+    await appDb.SoftwareInventoryItems
+      .IgnoreQueryFilters()
+      .Where(s => s.DeviceId == deviceId)
+      .ExecuteUpdateAsync(s => s.SetProperty(x => x.TenantId, request.NewTenantId));
+
+    await appDb.InstalledUpdates
+      .IgnoreQueryFilters()
+      .Where(u => u.DeviceId == deviceId)
+      .ExecuteUpdateAsync(u => u.SetProperty(x => x.TenantId, request.NewTenantId));
+
+    await appDb.PendingPatches
+      .IgnoreQueryFilters()
+      .Where(p => p.DeviceId == deviceId)
+      .ExecuteUpdateAsync(p => p.SetProperty(x => x.TenantId, request.NewTenantId));
+
+    await appDb.SaveChangesAsync();
+
+    logger.LogInformation(
+      "Device {DeviceId} ({DeviceName}) reassigned from tenant {OldTenantId} to {NewTenantId}.",
+      deviceId, device.Name, previousTenantId, request.NewTenantId);
+
+    return Ok(new ReassignDeviceTenantResponseDto(
+      device.Id, device.Name, previousTenantId, request.NewTenantId));
   }
 }

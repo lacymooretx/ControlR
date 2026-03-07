@@ -22,9 +22,8 @@ public record ProvisionTenantRequestDto(
   [StringLength(200, MinimumLength = 1)]
   string TenantName,
 
-  [Required]
   [EmailAddress]
-  string AdminEmail,
+  string? AdminEmail,
 
   [StringLength(256, MinimumLength = 6)]
   string? AdminPassword);
@@ -32,9 +31,19 @@ public record ProvisionTenantRequestDto(
 public record ProvisionTenantResponseDto(
   Guid TenantId,
   string TenantName,
-  Guid UserId,
-  string AdminEmail,
-  string PersonalAccessToken,
   bool TenantCreated,
+  Guid? UserId,
+  string? AdminEmail,
+  string? PersonalAccessToken,
   bool UserCreated,
   bool PatCreated);
+
+public record ReassignDeviceTenantRequestDto(
+  [Required]
+  Guid NewTenantId);
+
+public record ReassignDeviceTenantResponseDto(
+  Guid DeviceId,
+  string? DeviceName,
+  Guid PreviousTenantId,
+  Guid NewTenantId);

@@ -1,5 +1,53 @@
 # ControlR Deployment Runlog
 
+## 2026-03-06: Tenant Provisioning API for Multi-Tenant ImmyBot Deployment
+
+### What was done
+Built a ServerAdministrator-only tenant provisioning API to support multi-tenant ImmyBot deployments where each ImmyBot client = one ControlR tenant.
+
+### New endpoints (all require ServerAdministrator role)
+- `GET /api/tenants` — list all tenants
+- `GET /api/tenants/{id}` — get tenant
+- `POST /api/tenants` — create tenant
+- `PUT /api/tenants/{id}` — update tenant name
+- `DELETE /api/tenants/{id}` — delete tenant (only if empty)
+- `POST /api/tenants/provision` — **idempotent** create tenant + admin user + PAT in one call
+
+### Provision endpoint flow
+1. Find or create tenant by name
+2. Find or create admin user in that tenant (with TenantAdmin, DeviceSuperUser, AgentInstaller, InstallerKeyManager roles)
+3. Create a new PAT for that user (replaces any existing Provisioned-* PAT)
+4. Returns: tenantId, tenantName, userId, adminEmail, personalAccessToken, and flags for what was created
+
+### ImmyBot script updates
+Scripts now take 3 parameters instead of 1:
+- `ControlRServerAdminToken` — ServerAdministrator PAT (one for all tenants)
+- `ImmyBotTenantName` — client/tenant name (auto-provisions the ControlR tenant)
+- `AdminEmail` — email for the tenant admin user
+
+### Files created
+- `ControlR.Web.Server/Api/TenantsController.cs`
+- `Libraries/ControlR.Libraries.Shared/Dtos/ServerApi/TenantDtos.cs`
+
+### Files modified (local, gitignored)
+- `docs/immybot/Install-ControlRAgent.ps1` — uses provision endpoint
+- `docs/immybot/Configure-ControlRAgent.ps1` — uses provision endpoint
+
+### Commit
+- `81e861fa` — Add tenant provisioning API for ImmyBot multi-tenant deployment
+
+### Deployment
+- Built and deployed to production
+- Verified endpoints return 401 without auth (not 404)
+- Set existing tenant name to "Aspendora"
+
+### Next steps
+- User needs to create a new ServerAdministrator PAT via the UI (old PAT plaintext is lost)
+- Update ImmyBot scripts with the new 3-parameter interface
+- Test end-to-end provisioning + agent install
+
+---
+
 ## 2026-03-06: Fix InstallerKey Validation for Agent Install
 
 ### Problem
