@@ -29,9 +29,12 @@ builder.Services.AddScoped<IBrandingState, BrandingStateClient>();
 
 builder.Services.AddControlrWebClient();
 
+builder.Services.AddSingleton<ITenantSwitcherService, TenantSwitcherService>();
+builder.Services.AddTransient<TenantOverrideHandler>();
+
 builder.Services.AddHttpClient<IControlrApi, ControlrApi>((services, client) =>
 {
   client.BaseAddress = new Uri(builder.HostEnvironment.BaseAddress);
-});
+}).AddHttpMessageHandler<TenantOverrideHandler>();
     
 await builder.Build().RunAsync();

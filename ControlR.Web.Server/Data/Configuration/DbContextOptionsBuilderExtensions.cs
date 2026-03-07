@@ -7,7 +7,8 @@ public static class DbContextOptionsBuilderExtensions
 {
   public static DbContextOptionsBuilder UseUserClaims(
       this DbContextOptionsBuilder builder,
-      ClaimsPrincipal user)
+      ClaimsPrincipal user,
+      Guid? tenantIdOverride = null)
   {
     if (!user.TryGetTenantId(out var tenantId) ||
         !user.TryGetUserId(out var userId))
@@ -17,7 +18,7 @@ public static class DbContextOptionsBuilderExtensions
 
     var options = new ClaimsDbContextOptions
     {
-      TenantId = tenantId,
+      TenantId = tenantIdOverride ?? tenantId,
       UserId = userId
     };
 

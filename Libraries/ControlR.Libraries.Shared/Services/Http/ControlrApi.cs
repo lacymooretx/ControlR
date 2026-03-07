@@ -73,6 +73,7 @@ public interface IControlrApi
   Task<Result<ScheduledTaskDto[]>> GetAllScheduledTasks();
   Task<Result<SavedScriptDto[]>> GetAllScripts();
   Task<Result<TagResponseDto[]>> GetAllTags(bool includeLinkedIds = false);
+  Task<Result<TenantResponseDto[]>> GetAllTenants();
   Task<Result<UserResponseDto[]>> GetAllUsers();
   Task<Result<PluginRegistrationDto[]>> GetAllPlugins();
   Task<Result<WebhookSubscriptionDto[]>> GetAllWebhooks();
@@ -770,6 +771,12 @@ public class ControlrApi(
     return await TryCallApi(async () =>
       await _client.GetFromJsonAsync<TagResponseDto[]>(
         $"{HttpConstants.TagsEndpoint}?includeLinkedIds={includeLinkedIds}"));
+  }
+
+  public async Task<Result<TenantResponseDto[]>> GetAllTenants()
+  {
+    return await TryCallApi(async () =>
+      await _client.GetFromJsonAsync<TenantResponseDto[]>(HttpConstants.TenantsEndpoint));
   }
 
   public async Task<Result<UserResponseDto[]>> GetAllUsers()

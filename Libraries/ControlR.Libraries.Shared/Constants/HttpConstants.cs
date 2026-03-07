@@ -39,6 +39,7 @@ public static class HttpConstants
   public const string SessionRecordingsEndpoint = "/api/session-recordings";
   public const string SupportSessionsEndpoint = "/api/support-sessions";
   public const string TagsEndpoint = "/api/tags";
+  public const string TenantsEndpoint = "/api/tenants";
   public const string TenantSettingsEndpoint = "/api/tenant-settings";
   public const string ToolboxEndpoint = "/api/toolbox";
   public const string TestEmailEndpoint = "/api/test-email";

@@ -411,7 +411,16 @@ public static class WebApplicationBuilderExtensions
       var accessor = sp.GetRequiredService<IHttpContextAccessor>();
       if (accessor.HttpContext?.User is { Identity.IsAuthenticated: true } user)
       {
-        options.UseUserClaims(user);
+        // ServerAdmin can override tenant context via header
+        Guid? tenantOverride = null;
+        if (user.IsInRole(RoleNames.ServerAdministrator) &&
+            accessor.HttpContext.Request.Headers.TryGetValue("X-Tenant-Id", out var tenantHeader) &&
+            Guid.TryParse(tenantHeader.FirstOrDefault(), out var parsedTenantId))
+        {
+          tenantOverride = parsedTenantId;
+        }
+
+        options.UseUserClaims(user, tenantOverride);
         options.EnableDetailedErrors(builder.Environment.IsDevelopment());
       }
     }, lifetime: ServiceLifetime.Transient);
