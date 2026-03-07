@@ -1,5 +1,56 @@
 # ControlR Deployment Runlog
 
+## 2026-03-06: Fix InstallerKey Validation for Agent Install
+
+### Problem
+Agent install via ImmyBot returned 400 on `POST /api/devices`. Two root causes:
+
+1. **Tenant query filter**: `AgentInstallerKeys` has `.HasQueryFilter(x => x.TenantId == _tenantId)`. Anonymous `POST /api/devices` has no tenant context, so key lookups returned null. **Fix**: Added `IgnoreQueryFilters()` to all queries in `AgentInstallerKeyManager.cs` (deployed earlier).
+
+2. **Enum mismatch**: Install script sent `keyType = 2` (TimeBased) instead of `keyType = 1` (UsageBased). TimeBased keys with no expiration immediately fail validation and get deleted. **Fix**: Changed `keyType = 2` → `keyType = 1` in `docs/immybot/Install-ControlRAgent.ps1`.
+
+### Files changed
+- `ControlR.Web.Server/Services/AgentInstallerKeyManager.cs` — `IgnoreQueryFilters()` on 3 queries (already deployed)
+- `docs/immybot/Install-ControlRAgent.ps1` — `keyType = 2` → `keyType = 1`
+
+### Next steps
+- User updates script in ImmyBot and re-tests install
+- Address slow download speed (144MB agent binary)
+
+---
+
+## 2026-03-06: API-Driven ImmyBot Deployment + /api/me Endpoint
+
+### What was done
+1. Created `/api/me` endpoint (`MeController.cs`) — returns userId, tenantId, roles from PAT auth
+2. Rewrote all 4 ImmyBot PowerShell scripts to be fully API-driven (only 2 config vars needed):
+   - `Detect-ControlRAgent.ps1` — registry + service fallback detection
+   - `Install-ControlRAgent.ps1` — auto-discovers tenant via `/api/me`, creates single-use installer key
+   - `Uninstall-ControlRAgent.ps1` — finds agent exe, runs built-in uninstall
+   - `Configure-ControlRAgent.ps1` — auto-creates device groups per ImmyBot tenant name
+3. Updated `docs/immybot/README.md` with new 2-variable setup instructions
+4. Updated OpenAPI spec (`ControlR.Web.Server.json`) with all Phase 7-11 endpoints
+5. Built and deployed to production (149.28.251.164)
+6. Created "ImmyBot-Deployment" PAT via browser UI
+
+### Configuration values for ImmyBot
+- `ControlRServerUrl`: `https://control.aspendora.com`
+- `ControlRPersonalAccessToken`: (created via UI, user must copy from dialog)
+
+### Commit
+- `a4eac6b4` — Add /api/me endpoint and rewrite ImmyBot scripts for API-driven deployment
+
+---
+
+## 2026-03-06: SMTP2GO Email + Version Fix + .NET 10 Upgrade
+
+- Replaced MailKit SMTP with SMTP2GO REST API (`EmailSender.cs`)
+- Fixed agent version "outdated" false positive (3-part vs 4-part version comparison)
+- Upgraded local Mac from .NET 9 to .NET 10
+- Generated EF Core migration for Phase 10-11 entities
+
+---
+
 ## 2026-03-06: All 20 Gap Features Complete (Phases 7-11)
 
 All features from the ScreenConnect/TeamViewer/LogMeIn/Splashtop/AnyDesk gap analysis are now implemented.
