@@ -1,5 +1,33 @@
 # ControlR Deployment Runlog
 
+## 2026-03-06: Fix SSR crash — ITenantSwitcherService not registered on server
+
+### Problem
+After deploying the tenant switcher feature, the server crashed on every request with:
+```
+System.InvalidOperationException: Cannot provide a value for property 'TenantSwitcher' on type 'ControlR.Web.Client.Components.Layout.NavMenu'. There is no registered service of type 'ControlR.Web.Client.Services.ITenantSwitcherService'.
+```
+NavMenu renders during SSR on the server side, but `ITenantSwitcherService` was only registered in the WASM client's `Program.cs`.
+
+### Fix
+Added `builder.Services.AddSingleton<ITenantSwitcherService, TenantSwitcherService>()` to `WebApplicationBuilderExtensions.cs` (server-side DI).
+
+### Files modified
+- `ControlR.Web.Server/Startup/WebApplicationBuilderExtensions.cs` — added server-side registration
+
+### Commit
+- `03a28aad` — Register ITenantSwitcherService on server side for SSR compatibility
+
+### Deployment
+- Built and deployed to production at 149.28.251.164
+- Site confirmed working (HTTP 200, no visible errors)
+- Tenant Context dropdown visible in Server Admin section
+- Tenant column visible in device data grid
+
+### Remaining
+- Devices table empty — agent on 3e-adminpc in exponential backoff, will reconnect on its own
+- 3endt tenant lost during previous crash — needs to be recreated after device reconnects
+
 ## 2026-03-06: Tenant Provisioning API for Multi-Tenant ImmyBot Deployment
 
 ### What was done
