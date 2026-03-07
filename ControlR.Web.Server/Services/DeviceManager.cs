@@ -220,7 +220,11 @@ public class DeviceManager(
       deviceDto,
       nameof(DeviceUpdateRequestDto.TenantId)); // TenantId is handled separately
 
-    entity.TenantId = deviceDto.TenantId;
+    // Only set TenantId for new devices; existing devices may have been reassigned
+    if (entityState == EntityState.Added)
+    {
+      entity.TenantId = deviceDto.TenantId;
+    }
     entity.Drives = [.. deviceDto.Drives];
     if (tagIds is not null)
     {
