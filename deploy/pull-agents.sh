@@ -73,12 +73,31 @@ fi
 # Create state/log dirs
 mkdir -p "$(dirname "$STATE_FILE")"
 
-# ── Find latest successful build run ───────────────────────────────────────────
-log "Checking for new successful builds..."
+# ── Find latest completed build run with artifacts ─────────────────────────────
+log "Checking for new builds with agent artifacts..."
 
-RUN_JSON=$(gh_api "/repos/${REPO}/actions/workflows/${WORKFLOW_FILE}/runs?status=success&per_page=1&branch=main")
-RUN_ID=$(echo "$RUN_JSON" | jq -r '.workflow_runs[0].id // empty')
-RUN_NAME=$(echo "$RUN_JSON" | jq -r '.workflow_runs[0].display_title // empty')
+# Look at the last 5 completed runs (not just successful — tests may fail while
+# build jobs succeed and produce valid signed artifacts).
+RUN_JSON=$(gh_api "/repos/${REPO}/actions/workflows/${WORKFLOW_FILE}/runs?status=completed&per_page=5&branch=main")
+
+# Find the first run that has all expected artifacts
+RUN_ID=""
+RUN_NAME=""
+for i in $(seq 0 4); do
+  CANDIDATE_ID=$(echo "$RUN_JSON" | jq -r ".workflow_runs[$i].id // empty")
+  [[ -z "$CANDIDATE_ID" ]] && break
+
+  # Check if this run has the expected agent artifacts
+  CANDIDATE_ARTIFACTS=$(gh_api "/repos/${REPO}/actions/runs/${CANDIDATE_ID}/artifacts")
+  ARTIFACT_COUNT=$(echo "$CANDIDATE_ARTIFACTS" | jq '[.artifacts[] | select(.name | startswith("Agent-")) | select(.expired == false)] | length')
+
+  if [[ "$ARTIFACT_COUNT" -ge 5 ]]; then
+    RUN_ID="$CANDIDATE_ID"
+    RUN_NAME=$(echo "$RUN_JSON" | jq -r ".workflow_runs[$i].display_title // empty")
+    ARTIFACTS_JSON="$CANDIDATE_ARTIFACTS"
+    break
+  fi
+done
 
 if [[ -z "$RUN_ID" ]]; then
   log "No successful build runs found."
@@ -102,7 +121,7 @@ if [[ "$LAST_DEPLOYED" == "$RUN_ID" ]]; then
 fi
 
 # ── Download artifacts ─────────────────────────────────────────────────────────
-ARTIFACTS_JSON=$(gh_api "/repos/${REPO}/actions/runs/${RUN_ID}/artifacts")
+# ARTIFACTS_JSON was already fetched during run selection above
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
@@ -157,7 +176,7 @@ for ARTIFACT_NAME in "${!ARTIFACT_MAP[@]}"; do
   docker exec -u 0 "$CONTAINER" chmod 644 "${DOWNLOADS_BASE}/${DEST_PATH}"
 
   log "Deployed: ${ARTIFACT_NAME} → ${DOWNLOADS_BASE}/${DEST_PATH}"
-  ((DEPLOYED_COUNT++))
+  DEPLOYED_COUNT=$((DEPLOYED_COUNT + 1))
 done
 
 # ── Update Version.txt ─────────────────────────────────────────────────────────
