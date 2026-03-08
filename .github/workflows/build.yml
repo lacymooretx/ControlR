@@ -151,9 +151,9 @@ jobs:
 
       - name: Setup Code Signing Keychain
         env:
-          APPLE_P12_BASE64: ${{ secrets.APPLE_P12_BASE64 }}
-          APPLE_P12_PASSWORD: ${{ secrets.APPLE_P12_PASSWORD }}
-          APPLE_DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID }}
+          APPLE_P12_BASE64: ${{ secrets.MACOS_P12_BASE64 }}
+          APPLE_P12_PASSWORD: ${{ secrets.MACOS_P12_PASSWORD }}
+          APPLE_DEVELOPER_ID: ${{ secrets.MACOS_CODESIGN_IDENTITY }}
         shell: bash
         run: |
           # Create temporary keychain
@@ -275,6 +275,29 @@ jobs:
             --sign "$IDENTITY_HASH" \
             "./ControlR.Agent/bin/publish/${{ matrix.arch }}/ControlR.Agent"
 
+      - name: Notarize Agent (${{ matrix.arch }})
+        if: inputs.notarize_mac_undle && env.MACOS_NOTARIZE_KEY_BASE64 != ''
+        env:
+          MACOS_NOTARIZE_KEY_BASE64: ${{ secrets.MACOS_NOTARIZE_KEY_BASE64 }}
+          MACOS_NOTARIZE_KEY_ID: ${{ secrets.MACOS_NOTARIZE_KEY_ID }}
+          MACOS_NOTARIZE_ISSUER_ID: ${{ secrets.MACOS_NOTARIZE_ISSUER_ID }}
+        run: |
+          # Decode notarization API key
+          echo "$MACOS_NOTARIZE_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/notarize-key.p8"
+
+          # Create a ZIP for notarization submission
+          AGENT_PATH="./ControlR.Agent/bin/publish/${{ matrix.arch }}/ControlR.Agent"
+          ditto -c -k "$AGENT_PATH" "$RUNNER_TEMP/ControlR.Agent-notarize.zip"
+
+          echo "Submitting for notarization..."
+          xcrun notarytool submit "$RUNNER_TEMP/ControlR.Agent-notarize.zip" \
+            --key "$RUNNER_TEMP/notarize-key.p8" \
+            --key-id "$MACOS_NOTARIZE_KEY_ID" \
+            --issuer "$MACOS_NOTARIZE_ISSUER_ID" \
+            --wait
+
+          rm -f "$RUNNER_TEMP/notarize-key.p8" "$RUNNER_TEMP/ControlR.Agent-notarize.zip"
+
       - name: Upload Agent (${{ matrix.arch }})
         uses: actions/upload-artifact@v6
         with:
@@ -297,16 +320,16 @@ jobs:
 
   build-windows-binaries:
     name: Windows Build (${{ matrix.arch }})
-    # When using self-hosted Windows runners, require both the self-hosted label and OS label.
     runs-on: ${{ fromJson(inputs.use_self_hosted_runners) && fromJson('["self-hosted","Windows"]') || fromJson('["windows-latest"]') }}
     environment: secure-signing
     needs: set-version
     permissions:
-      id-token: write
       contents: read
     strategy:
       matrix:
         arch: [win-x86, win-x64]
+    env:
+      DIGICERT_KEYPAIR_ALIAS: key_1474429650
 
     steps:
       - name: Checkout
@@ -319,19 +342,33 @@ jobs:
       - name: Setup .NET
         uses: ./.github/actions/setup-dotnet
 
-      # ===== Azure Login with OIDC =====
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      # ===== Install AzureSignTool =====
-      - name: Install AzureSignTool
-        shell: pwsh
+      # ===== DigiCert KeyLocker Setup (same as RustDesk) =====
+      - name: Setup DigiCert Signing Tools
+        if: ${{ secrets.SM_API_KEY != '' }}
+        shell: powershell
         run: |
-          dotnet tool install --global AzureSignTool
+          curl.exe -X GET "https://one.digicert.com/signingmanager/api-ui/v1/releases/smtools-windows-x64.msi/download" `
+            -H "x-api-key:$env:SM_API_KEY" -o "$env:RUNNER_TEMP\smtools.msi" -s -w "%{http_code}" | Write-Host
+          $msiPath = "$env:RUNNER_TEMP\smtools.msi"
+          Write-Host "File size: $((Get-Item $msiPath).Length)"
+          Write-Host "Installing DigiCert SMCTL from $msiPath"
+          $proc = Start-Process msiexec -ArgumentList "/i `"$msiPath`" /qn /norestart /l*v `"$env:RUNNER_TEMP\msi_install.log`"" -Wait -PassThru
+          if ($proc.ExitCode -ne 0) {
+            Get-Content "$env:RUNNER_TEMP\msi_install.log" -Tail 50
+            throw "msiexec failed with exit code $($proc.ExitCode)"
+          }
+          $smctl = Get-ChildItem "C:\Program Files\DigiCert" -Recurse -Filter "smctl.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $smctl) {
+            $smctl = Get-ChildItem "C:\Program Files" -Recurse -Filter "smctl.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          if (-not $smctl) { throw "smctl.exe not found after install" }
+          $smctlDir = $smctl.DirectoryName
+          Write-Host "smctl.exe found at $($smctl.FullName)"
+          [IO.File]::AppendAllText($env:GITHUB_PATH, "$smctlDir`n")
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\digicert_cert.p12", [Convert]::FromBase64String($env:SM_CLIENT_CERT_BASE64))
+        env:
+          SM_API_KEY: ${{ secrets.SM_API_KEY }}
+          SM_CLIENT_CERT_BASE64: ${{ secrets.SM_CLIENT_CERT_FILE_BASE64 }}
 
       # ===== Build Windows =====
       - name: Build DesktopClient (${{ matrix.arch }})
@@ -344,19 +381,18 @@ jobs:
           dotnet publish ControlR.DesktopClient\ -c Release -r ${{ matrix.arch }} --self-contained -o ControlR.DesktopClient\bin\publish\${{ matrix.arch }}\ -p:Version=$env:VERSION -p:FileVersion=$env:VERSION
 
       - name: Sign DesktopClient (${{ matrix.arch }})
-        shell: pwsh
+        if: ${{ secrets.SM_API_KEY != '' }}
+        shell: bash
         run: |
-          dnx azuresigntool --yes sign `
-            --du="${{ vars.SIGNING_DESCRIPTION_URL }}" `
-            --fd=sha256 `
-            --kvu="${{ secrets.AZURE_KEY_VAULT_URI }}" `
-            --kvc="${{ secrets.AZURE_KEY_VAULT_CERTIFICATE_NAME }}" `
-            --kvm `
-            --tr=http://timestamp.digicert.com `
-            --td=sha256 `
-            --skip-signed `
-            "${{ github.workspace }}\ControlR.DesktopClient\bin\publish\${{ matrix.arch }}\*.exe " `
-            "${{ github.workspace }}\ControlR.DesktopClient\bin\publish\${{ matrix.arch }}\*.dll"
+          shopt -s nullglob
+          for f in ./ControlR.DesktopClient/bin/publish/${{ matrix.arch }}/*.exe ./ControlR.DesktopClient/bin/publish/${{ matrix.arch }}/*.dll; do
+            smctl sign --keypair-alias $DIGICERT_KEYPAIR_ALIAS --input "$f" && echo "Signed: $f"
+          done
+        env:
+          SM_API_KEY: ${{ secrets.SM_API_KEY }}
+          SM_CLIENT_CERT_FILE: ${{ runner.temp }}/digicert_cert.p12
+          SM_CLIENT_CERT_PASSWORD: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
+          SM_HOST: https://clientauth.one.digicert.com
 
       - name: Package and Prepare DesktopClient (${{ matrix.arch }})
         shell: pwsh
@@ -378,19 +414,18 @@ jobs:
           dotnet publish ControlR.Agent\ -c Release -r ${{ matrix.arch }} -o ControlR.Web.Server\wwwroot\downloads\${{ matrix.arch }}\ -p:PublishSingleFile=true -p:UseAppHost=true -p:Version=$env:VERSION -p:FileVersion=$env:VERSION -p:IncludeAllContentForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:IncludeAppSettingsInSingleFile=true
 
       - name: Sign Agent (${{ matrix.arch }})
-        shell: pwsh
+        if: ${{ secrets.SM_API_KEY != '' }}
+        shell: bash
         run: |
-          dnx azuresigntool --yes sign `
-            --du="${{ vars.SIGNING_DESCRIPTION_URL }}" `
-            --fd=sha256 `
-            --kvu="${{ secrets.AZURE_KEY_VAULT_URI }}" `
-            --kvc="${{ secrets.AZURE_KEY_VAULT_CERTIFICATE_NAME }}" `
-            --kvm `
-            --tr=http://timestamp.digicert.com `
-            --td=sha256 `
-            --skip-signed `
-            "${{ github.workspace }}\ControlR.Web.Server\wwwroot\downloads\${{ matrix.arch }}\*.exe " `
-            "${{ github.workspace }}\ControlR.Web.Server\wwwroot\downloads\${{ matrix.arch }}\*.dll"
+          shopt -s nullglob
+          for f in ./ControlR.Web.Server/wwwroot/downloads/${{ matrix.arch }}/*.exe ./ControlR.Web.Server/wwwroot/downloads/${{ matrix.arch }}/*.dll; do
+            smctl sign --keypair-alias $DIGICERT_KEYPAIR_ALIAS --input "$f" && echo "Signed: $f"
+          done
+        env:
+          SM_API_KEY: ${{ secrets.SM_API_KEY }}
+          SM_CLIENT_CERT_FILE: ${{ runner.temp }}/digicert_cert.p12
+          SM_CLIENT_CERT_PASSWORD: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
+          SM_HOST: https://clientauth.one.digicert.com
 
       - name: Upload Agent (${{ matrix.arch }})
         uses: actions/upload-artifact@v6

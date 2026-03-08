@@ -3,7 +3,7 @@
 		<OutputType>Exe</OutputType>
 		<ApplicationIcon>..\.assets\appicon.ico</ApplicationIcon>
 		<AllowUnsafeBlocks>True</AllowUnsafeBlocks>
-		<Authors>jaredg</Authors>
+		<Product>ControlR Agent</Product>
 		<UserSecretsId>a11d53e3-322a-427d-a035-74dd588427a9</UserSecretsId>
 	</PropertyGroup>
 	<ItemGroup>

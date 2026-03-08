@@ -6,12 +6,12 @@
       false
     </NuGetAudit>
 
-		<Authors>Jared Goodwin</Authors>
-		<Copyright>©️ $([System.DateTime]::Now.Year) Bitbound</Copyright>
-		<RepositoryUrl>https://github.com/bitbound/controlr</RepositoryUrl>
-		<PackageProjectUrl>https://github.com/bitbound/controlr</PackageProjectUrl>
-		<Company>Bitbound</Company>
-		<Description>Open-source remote control and remote access.</Description>
+		<Authors>Aspendora Technologies, LLC</Authors>
+		<Copyright>Copyright (c) $([System.DateTime]::Now.Year) Aspendora Technologies, LLC. All rights reserved.</Copyright>
+		<RepositoryUrl>https://github.com/lacymooretx/controlr</RepositoryUrl>
+		<PackageProjectUrl>https://github.com/lacymooretx/controlr</PackageProjectUrl>
+		<Company>Aspendora Technologies, LLC</Company>
+		<Description>Remote control and remote access by Aspendora Technologies.</Description>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>

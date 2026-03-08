@@ -724,3 +724,39 @@ All 20 features from the ScreenConnect/TeamViewer/LogMeIn/Splashtop/AnyDesk gap 
 | Phase 11 | Plugin API, Helpdesk/Ticketing, Patch Management, AI Suggestions, Remote Printing (foundation), Audio Forwarding (foundation) |
 
 **Note:** Multi-monitor switching was already implemented in the existing codebase (ChangeDisplaysDto, ViewPopover.razor display picker). Connection quality indicators were partially implemented (ManagedRelayStream metrics, MetricsFrame.razor) and enhanced in Phase 10A.
+
+---
+
+## Aspendora Branding & Code Signing
+**Status:** Phase 1 Complete — Awaiting Approval
+**Started:** 2026-03-08
+
+### Phase 1: Branding Assets & Code — Complete
+- Generated Aspendora app icon (red roofline + "Aspendora technologies" on dark navy rounded-square) in all formats:
+  - `.ico` (16/32/48/256px multi-res) — Windows agent & desktop client
+  - `.icns` (16-1024px) — macOS
+  - `.png` at 192, 512, 1024px — PWA, web, package icon
+- Replaced all icon files:
+  - `.assets/appicon.{ico,icns,png}`
+  - `ControlR.DesktopClient/Assets/appicon.{ico,icns,png}`
+  - `ControlR.Web.Server/wwwroot/favicon.ico`
+  - `ControlR.Web.Server/wwwroot/appicon-{192,512}.png`
+  - `ControlR.Web.Server/wwwroot/appicon-transparent.png`
+  - `ControlR.Web.Server/wwwroot/images/company-logo.png`
+- Updated `Directory.Build.props`: Authors, Company, Copyright, Repository URLs → Aspendora Technologies, LLC
+- Updated `BrandingConstants.cs`: Added `CompanyName` constant
+
+### Phase 2: Code Signing (DigiCert KeyLocker + Apple Developer ID) — Complete
+- Replaced Windows signing: Azure Key Vault/AzureSignTool → DigiCert KeyLocker (`smctl`)
+  - Same infrastructure as RustDesk (`~/code/rustdesk`)
+  - Keypair alias: `key_1474429650`
+  - Certificate identity: Aspendora Technologies, LLC
+- Kept macOS signing with Apple Developer ID (`Y6PY3BLQD2`)
+- Added macOS notarization step (opt-in via `notarize_mac_undle` workflow input)
+- Removed Azure OIDC login dependency (no longer needed)
+- Created `docs/code-signing-secrets.md` with all required GitHub secrets
+
+### Phase 3: Deploy & Verify — Pending
+- [ ] Add GitHub secrets to `lacymooretx/controlr` repo (copy from RustDesk repo)
+- [ ] Run build workflow to verify signing works
+- [ ] Deploy updated server image to production
