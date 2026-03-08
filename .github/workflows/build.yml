@@ -138,6 +138,8 @@ jobs:
     strategy:
       matrix:
         arch: [osx-arm64, osx-x64]
+    env:
+      NOTARIZE_ENABLED: "${{ secrets.MACOS_NOTARIZE_KEY_BASE64 }}-2"
 
     steps:
       - name: Checkout
@@ -276,7 +278,7 @@ jobs:
             "./ControlR.Agent/bin/publish/${{ matrix.arch }}/ControlR.Agent"
 
       - name: Notarize Agent (${{ matrix.arch }})
-        if: inputs.notarize_mac_undle && env.MACOS_NOTARIZE_KEY_BASE64 != ''
+        if: inputs.notarize_mac_undle && env.NOTARIZE_ENABLED != '-2'
         env:
           MACOS_NOTARIZE_KEY_BASE64: ${{ secrets.MACOS_NOTARIZE_KEY_BASE64 }}
           MACOS_NOTARIZE_KEY_ID: ${{ secrets.MACOS_NOTARIZE_KEY_ID }}
@@ -330,6 +332,7 @@ jobs:
         arch: [win-x86, win-x64]
     env:
       DIGICERT_KEYPAIR_ALIAS: key_1474429650
+      DIGICERT_SIGN: "${{ secrets.SM_API_KEY }}-2"
 
     steps:
       - name: Checkout
@@ -344,7 +347,7 @@ jobs:
 
       # ===== DigiCert KeyLocker Setup (same as RustDesk) =====
       - name: Setup DigiCert Signing Tools
-        if: ${{ secrets.SM_API_KEY != '' }}
+        if: env.DIGICERT_SIGN != '-2'
         shell: powershell
         run: |
           curl.exe -X GET "https://one.digicert.com/signingmanager/api-ui/v1/releases/smtools-windows-x64.msi/download" `
@@ -381,7 +384,7 @@ jobs:
           dotnet publish ControlR.DesktopClient\ -c Release -r ${{ matrix.arch }} --self-contained -o ControlR.DesktopClient\bin\publish\${{ matrix.arch }}\ -p:Version=$env:VERSION -p:FileVersion=$env:VERSION
 
       - name: Sign DesktopClient (${{ matrix.arch }})
-        if: ${{ secrets.SM_API_KEY != '' }}
+        if: env.DIGICERT_SIGN != '-2'
         shell: bash
         run: |
           shopt -s nullglob
@@ -414,7 +417,7 @@ jobs:
           dotnet publish ControlR.Agent\ -c Release -r ${{ matrix.arch }} -o ControlR.Web.Server\wwwroot\downloads\${{ matrix.arch }}\ -p:PublishSingleFile=true -p:UseAppHost=true -p:Version=$env:VERSION -p:FileVersion=$env:VERSION -p:IncludeAllContentForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:IncludeAppSettingsInSingleFile=true
 
       - name: Sign Agent (${{ matrix.arch }})
-        if: ${{ secrets.SM_API_KEY != '' }}
+        if: env.DIGICERT_SIGN != '-2'
         shell: bash
         run: |
           shopt -s nullglob
