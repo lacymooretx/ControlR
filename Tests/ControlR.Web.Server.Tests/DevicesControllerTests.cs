@@ -943,7 +943,8 @@ public class DevicesControllerTests(ITestOutputHelper testOutput)
     var tenant1 = await services.CreateTestTenant("Tenant 1");
     var tenant2 = await services.CreateTestTenant("Tenant 2");
 
-    // Create user for tenant 1
+    // Create a seed user first so user1 is not auto-assigned ServerAdministrator
+    await services.CreateTestUser(tenant1.Id, email: "seed@t.local");
     var user1 = await services.CreateTestUser(tenant1.Id, email: "user1@example.com", roles: RoleNames.DeviceSuperUser);
 
     // Create devices for both tenants

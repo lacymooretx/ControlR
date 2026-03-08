@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using ControlR.Libraries.Shared.Dtos.ServerApi;
+using ControlR.Web.Client.Authz;
 using ControlR.Web.Server.Authn;
 using ControlR.Web.Server.Services;
 using ControlR.Web.Server.Tests.Helpers;
@@ -24,7 +25,11 @@ public class LogonTokenDeviceScopeTests(ITestOutputHelper testOutput)
     var otherDeviceId = Guid.NewGuid();
 
     // Setup tenant + devices + user
-    var user = await testApp.TestServer.Services.CreateTestUser();
+    var tenant = await testApp.TestServer.Services.CreateTestTenant();
+    // Create a seed user first so the test user is not auto-assigned ServerAdministrator
+    await testApp.TestServer.Services.CreateTestUser(tenant.Id, email: "seed@t.local");
+    var user = await testApp.TestServer.Services.CreateTestUser(
+      tenant.Id, roles: [RoleNames.DeviceSuperUser, RoleNames.TenantAdministrator]);
     await testApp.TestServer.Services.CreateTestDevice(user.TenantId, primaryDeviceId);
     await testApp.TestServer.Services.CreateTestDevice(user.TenantId, otherDeviceId);
 

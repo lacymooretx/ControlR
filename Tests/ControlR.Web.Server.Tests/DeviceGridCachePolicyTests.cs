@@ -52,9 +52,12 @@ public class DeviceGridCachePolicyTests
         var userId = Guid.NewGuid().ToString();
         
         // Setup authenticated user
+        var tenantId = Guid.NewGuid().ToString();
         var claims = new List<Claim>
         {
-            new(ClaimTypes.NameIdentifier, userId)
+            new(ClaimTypes.NameIdentifier, userId),
+            new(UserClaimTypes.UserId, userId),
+            new(UserClaimTypes.TenantId, tenantId)
         };
         var identity = new ClaimsIdentity(claims, "TestAuth");
         var user = new ClaimsPrincipal(identity);

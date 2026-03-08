@@ -15,6 +15,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Net;
 using System.Security.Claims;
+using ControlR.Web.Client.Authz;
 using Xunit.Abstractions;
 
 namespace ControlR.Web.Server.Tests;
@@ -167,11 +168,15 @@ public class DeviceGridOutputCacheTests(ITestOutputHelper testOutput)
     await policy.CacheRequestAsync(context, default);
     var unauthenticatedResult = context.EnableOutputCaching;
 
-    // Set authenticated user
+    // Set authenticated user with required custom claims
+    var userId = Guid.NewGuid();
+    var tenantId = Guid.NewGuid();
     context.HttpContext.User = new ClaimsPrincipal(
       new ClaimsIdentity(
       [
-        new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
+        new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+        new Claim(UserClaimTypes.UserId, userId.ToString()),
+        new Claim(UserClaimTypes.TenantId, tenantId.ToString()),
       ],
       "TestAuth"));
 
