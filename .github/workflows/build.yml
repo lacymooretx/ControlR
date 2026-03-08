@@ -580,3 +580,120 @@ jobs:
           name: DockerCompose
           path: docker-compose/docker-compose.yml
           retention-days: ${{ env.RETENTION_DAYS_ARTIFACTS }}
+
+  deploy-agents:
+    name: Deploy Signed Agents to Production
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      [
+        set-version,
+        build-windows-binaries,
+        build-linux-binaries,
+        build-mac-binaries,
+      ]
+    env:
+      DEPLOY_ENABLED: "${{ secrets.DEPLOY_SSH_KEY }}-2"
+
+    steps:
+      - name: Check build results
+        if: |
+          needs.build-windows-binaries.result != 'success' ||
+          needs.build-linux-binaries.result != 'success' ||
+          needs.build-mac-binaries.result != 'success'
+        run: |
+          echo "One or more build jobs failed — skipping deploy."
+          echo "Windows: ${{ needs.build-windows-binaries.result }}"
+          echo "Linux: ${{ needs.build-linux-binaries.result }}"
+          echo "macOS: ${{ needs.build-mac-binaries.result }}"
+          exit 1
+
+      - name: Skip if no deploy key
+        if: env.DEPLOY_ENABLED == '-2'
+        run: |
+          echo "DEPLOY_SSH_KEY not set — skipping deploy."
+          exit 0
+
+      - name: Download Agent (win-x86)
+        uses: actions/download-artifact@v7
+        with:
+          name: Agent-win-x86
+          path: agents/win-x86/
+
+      - name: Download Agent (win-x64)
+        uses: actions/download-artifact@v7
+        with:
+          name: Agent-win-x64
+          path: agents/win-x64/
+
+      - name: Download Agent (linux-x64)
+        uses: actions/download-artifact@v7
+        with:
+          name: Agent-linux-x64
+          path: agents/linux-x64/
+
+      - name: Download Agent (macOS ARM64)
+        uses: actions/download-artifact@v7
+        with:
+          name: Agent-macOS-ARM64
+          path: agents/osx-arm64/
+
+      - name: Download Agent (macOS x64)
+        uses: actions/download-artifact@v7
+        with:
+          name: Agent-macOS-x64
+          path: agents/osx-x64/
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy agents to production
+        env:
+          VERSION: ${{ needs.set-version.outputs.version }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          SSH_CMD="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes root@$DEPLOY_HOST"
+          SCP_CMD="scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes"
+
+          echo "Deploying version $VERSION to $DEPLOY_HOST..."
+
+          # Ensure download directories exist inside the container
+          $SSH_CMD "docker exec -u 0 controlr mkdir -p \
+            /app/wwwroot/downloads/win-x86 \
+            /app/wwwroot/downloads/win-x64 \
+            /app/wwwroot/downloads/linux-x64 \
+            /app/wwwroot/downloads/osx-arm64 \
+            /app/wwwroot/downloads/osx-x64"
+
+          # Upload agent binaries to server temp
+          $SCP_CMD agents/win-x86/ControlR.Agent.exe   root@$DEPLOY_HOST:/tmp/agent-win-x86.exe
+          $SCP_CMD agents/win-x64/ControlR.Agent.exe   root@$DEPLOY_HOST:/tmp/agent-win-x64.exe
+          $SCP_CMD agents/linux-x64/ControlR.Agent     root@$DEPLOY_HOST:/tmp/agent-linux-x64
+          $SCP_CMD agents/osx-arm64/ControlR.Agent     root@$DEPLOY_HOST:/tmp/agent-osx-arm64
+          $SCP_CMD agents/osx-x64/ControlR.Agent       root@$DEPLOY_HOST:/tmp/agent-osx-x64
+
+          # Copy into running container
+          $SSH_CMD "
+            docker cp /tmp/agent-win-x86.exe controlr:/app/wwwroot/downloads/win-x86/ControlR.Agent.exe
+            docker cp /tmp/agent-win-x64.exe controlr:/app/wwwroot/downloads/win-x64/ControlR.Agent.exe
+            docker cp /tmp/agent-linux-x64   controlr:/app/wwwroot/downloads/linux-x64/ControlR.Agent
+            docker cp /tmp/agent-osx-arm64   controlr:/app/wwwroot/downloads/osx-arm64/ControlR.Agent
+            docker cp /tmp/agent-osx-x64     controlr:/app/wwwroot/downloads/osx-x64/ControlR.Agent
+
+            docker exec -u 0 controlr bash -c 'echo \"$VERSION\" > /app/wwwroot/downloads/Version.txt'
+            docker exec -u 0 controlr chmod -R 755 /app/wwwroot/downloads/
+
+            rm -f /tmp/agent-win-x86.exe /tmp/agent-win-x64.exe /tmp/agent-linux-x64 /tmp/agent-osx-arm64 /tmp/agent-osx-x64
+          "
+
+          echo "Verifying deployment..."
+          $SSH_CMD "docker exec controlr find /app/wwwroot/downloads -name 'ControlR.Agent*' -exec ls -lh {} \; && docker exec controlr cat /app/wwwroot/downloads/Version.txt"
+          echo "Deploy complete: v$VERSION"
+
+      - name: Cleanup SSH
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
