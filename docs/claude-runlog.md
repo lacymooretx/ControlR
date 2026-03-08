@@ -1,5 +1,45 @@
 # ControlR Deployment Runlog
 
+## 2026-03-08: Automated Agent Deployment (Server-Pull Model)
+
+### What was done
+Set up automated deployment of signed agent binaries from GitHub Actions to the production server using a server-pull model (cron polls GitHub API for new successful builds).
+
+### Why server-pull instead of CI-push
+GitHub Actions runners cannot SSH to the production server (firewall blocks GitHub IP ranges). The removed deploy-agents job in build.yml proved this.
+
+### Components
+1. **`deploy/pull-agents.sh`** — Shell script on server that:
+   - Checks GitHub API for latest successful Build workflow run on main
+   - Compares run ID to last deployed run (stored in state file)
+   - Downloads all 5 agent artifacts (win-x86, win-x64, linux-x64, osx-arm64, osx-x64)
+   - Copies them into the running `controlr` container via `docker cp`
+   - Updates Version.txt in the container
+
+2. **Server cron** — Runs every 15 minutes:
+   ```
+   */15 * * * * bash -c 'set -a; source /root/.secrets/.env; set +a; /opt/docker/controlr/deploy/pull-agents.sh'
+   ```
+
+3. **GitHub token** — Added `GITHUB_TOKEN` to `/root/.secrets/.env` on server
+
+### Other fixes in this session
+- **AgentVersionProvider**: Changed `IsDevelopment()` to `!IsProduction()` so tests (Testing env) use assembly version fallback instead of failing on missing Version.txt
+- **Artifact retention**: Increased default from 1 day to 3 days so pull script has time to download
+- **Removed SSH deploy-agents job** from build.yml (firewall-blocked approach)
+
+### Files changed
+- `deploy/pull-agents.sh` — new (server-pull deploy script)
+- `.github/workflows/build.yml` — removed deploy-agents job, increased retention to 3 days
+- `ControlR.Web.Server/Services/AgentVersionProvider.cs` — fix for test env
+
+### Server changes
+- `/opt/docker/controlr/deploy/pull-agents.sh` deployed
+- `/root/.secrets/.env` — added GITHUB_TOKEN
+- Cron job installed for root user
+
+---
+
 ## 2026-03-06: Fix SSR crash — ITenantSwitcherService not registered on server
 
 ### Problem

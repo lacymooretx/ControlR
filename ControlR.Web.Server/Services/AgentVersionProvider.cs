@@ -17,7 +17,7 @@ public class AgentVersionProvider(
   {
     try
     {
-      if (webHostEnvironment.IsDevelopment())
+      if (!webHostEnvironment.IsProduction())
       {
         _cachedVersion = typeof(AgentVersionProvider).Assembly.GetName()?.Version;
       }
