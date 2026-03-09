@@ -27,7 +27,8 @@ public static class HostExtensions
     await using var scope = host.Services.CreateAsyncScope();
     await using var context = scope.ServiceProvider.GetRequiredService<AppDb>();
     var emptyTenants = await context.Tenants
-      .Where(x => x.Users!.Count == 0)
+      .IgnoreQueryFilters()
+      .Where(x => x.Users!.Count == 0 && !context.Devices.IgnoreQueryFilters().Any(d => d.TenantId == x.Id))
       .ToListAsync();
 
     if (emptyTenants.Count == 0)
