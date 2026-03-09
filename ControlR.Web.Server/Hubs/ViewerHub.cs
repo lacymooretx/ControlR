@@ -1429,7 +1429,12 @@ public class ViewerHub(
       return Result.Fail<Device>("User is null.  Authorize tag should have prevented this.");
     }
 
-    var device = await _appDb.Devices
+    var isServerAdmin = Context.User.IsInRole(RoleNames.ServerAdministrator);
+    var devicesQuery = isServerAdmin
+      ? _appDb.Devices.IgnoreQueryFilters()
+      : _appDb.Devices;
+
+    var device = await devicesQuery
       .AsNoTracking()
       .FirstOrDefaultAsync(x => x.Id == deviceId);
 
