@@ -13,8 +13,12 @@ public class PersonalAccessTokenAuthenticationHandler(
   IOptionsMonitor<PersonalAccessTokenAuthenticationSchemeOptions> options) : AuthenticationHandler<PersonalAccessTokenAuthenticationSchemeOptions>(options, logger, encoder)
 {
   private const int MaxFailures = 5;
+  private const int FailureCacheSizeLimit = 10_000;
 
-  private static readonly MemoryCache _failureCache = new(new MemoryCacheOptions());
+  private static readonly MemoryCache _failureCache = new(new MemoryCacheOptions
+  {
+    SizeLimit = FailureCacheSizeLimit
+  });
   private static readonly TimeSpan _failureWindow = TimeSpan.FromMinutes(5);
 
   private readonly IPersonalAccessTokenManager _personalAccessTokenManager = personalAccessTokenManager;
@@ -41,7 +45,16 @@ public class PersonalAccessTokenAuthenticationHandler(
 
     // Basic rate limiting keyed by token prefix (ID part) or remote IP fallback
     var keyPart = providedPat.Split(':', 2).FirstOrDefault() ?? "unknown";
+    if (keyPart.Length > 64)
+    {
+      keyPart = keyPart[..64];
+    }
+
     var remoteIp = Context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+    if (remoteIp.Length > 64)
+    {
+      remoteIp = remoteIp[..64];
+    }
     var failureKey = $"patfail:{keyPart}:{remoteIp}";
     if (_failureCache.TryGetValue<int>(failureKey, out var failureCount) && failureCount >= MaxFailures)
     {
@@ -53,7 +66,14 @@ public class PersonalAccessTokenAuthenticationHandler(
     {
       // Increment failure counter
       var newCount = failureCount + 1;
-      _failureCache.Set(failureKey, newCount, _failureWindow);
+      _failureCache.Set(
+        failureKey,
+        newCount,
+        new MemoryCacheEntryOptions
+        {
+          AbsoluteExpirationRelativeToNow = _failureWindow,
+          Size = 1
+        });
       return AuthenticateResult.Fail("Invalid personal access token");
     }
 

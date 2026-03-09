@@ -29,6 +29,7 @@ public class AppOptions
   public string? MicrosoftClientId { get; init; }
   [ProtectedDataClassification]
   public string? MicrosoftClientSecret { get; init; }
+  public int PersonalAccessTokenLifetimeDays { get; init; } = 0;
   public bool PersistPasskeyLogin { get; init; }
   public string RecordingsStoragePath { get; init; } = "./data/recordings";
   public bool RequireUserEmailConfirmation { get; init; }

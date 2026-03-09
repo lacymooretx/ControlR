@@ -1,6 +1,7 @@
 using ControlR.Libraries.Shared.Constants;
 using ControlR.Web.Server.Services.DeviceManagement;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OutputCaching;
 
 namespace ControlR.Web.Server.Api;
 
@@ -95,7 +96,12 @@ public class DevicesController : ControllerBase
     [FromServices] IAuthorizationService authorizationService,
     [FromRoute] Guid deviceId)
   {
-    var device = await appDb.Devices.FirstOrDefaultAsync(x => x.Id == deviceId);
+    var isServerAdmin = User.IsInRole(RoleNames.ServerAdministrator);
+    var devicesQuery = isServerAdmin
+      ? appDb.Devices.IgnoreQueryFilters()
+      : appDb.Devices;
+
+    var device = await devicesQuery.FirstOrDefaultAsync(x => x.Id == deviceId);
     if (device is null)
     {
       return NotFound();
@@ -119,7 +125,12 @@ public class DevicesController : ControllerBase
     [FromServices] IAgentVersionProvider agentVersionProvider,
     [FromServices] IAuthorizationService authorizationService)
   {
-    var deviceStream = appDb.Devices.Include(x => x.DeviceGroup).AsAsyncEnumerable();
+    var isServerAdmin = User.IsInRole(RoleNames.ServerAdministrator);
+    var devicesQuery = isServerAdmin
+      ? appDb.Devices.IgnoreQueryFilters()
+      : appDb.Devices;
+
+    var deviceStream = devicesQuery.Include(x => x.DeviceGroup).AsAsyncEnumerable();
 
     await foreach (var device in deviceStream)
     {
@@ -141,7 +152,12 @@ public class DevicesController : ControllerBase
     [FromServices] IAgentVersionProvider agentVersionProvider,
     [FromRoute] Guid deviceId)
   {
-    var device = await appDb.Devices.FirstOrDefaultAsync(x => x.Id == deviceId);
+    var isServerAdmin = User.IsInRole(RoleNames.ServerAdministrator);
+    var devicesQuery = isServerAdmin
+      ? appDb.Devices.IgnoreQueryFilters()
+      : appDb.Devices;
+
+    var device = await devicesQuery.FirstOrDefaultAsync(x => x.Id == deviceId);
     if (device is null)
     {
       return NotFound();
@@ -160,6 +176,7 @@ public class DevicesController : ControllerBase
   }
 
   [HttpPost("search")]
+  [OutputCache(PolicyName = "DeviceGrid")]
   public async Task<ActionResult<DeviceSearchResponseDto>> SearchDevices(
     [FromBody] DeviceSearchRequestDto requestDto,
     [FromServices] AppDb appDb,

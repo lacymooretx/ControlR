@@ -1,4 +1,6 @@
 using ControlR.Libraries.Shared.Helpers;
+using ControlR.Web.Server.Options;
+using Microsoft.Extensions.Options;
 
 namespace ControlR.Web.Server.Services;
 
@@ -18,10 +20,12 @@ public interface IPersonalAccessTokenManager
 
 public class PersonalAccessTokenManager(
   AppDb appDb,
+  IOptionsMonitor<AppOptions> appOptions,
   TimeProvider timeProvider,
   IPasswordHasher<string> passwordHasher) : IPersonalAccessTokenManager
 {
   private readonly AppDb _appDb = appDb;
+  private readonly IOptionsMonitor<AppOptions> _appOptions = appOptions;
   private readonly IPasswordHasher<string> _passwordHasher = passwordHasher;
   private readonly TimeProvider _timeProvider = timeProvider;
 
@@ -31,12 +35,15 @@ public class PersonalAccessTokenManager(
     {
       var plainTextKey = RandomGenerator.CreateApiKey();
       var hashedKey = _passwordHasher.HashPassword(string.Empty, plainTextKey);
+      var now = _timeProvider.GetUtcNow();
+      var expiresAt = GetTokenExpiry(now);
 
       var personalAccessToken = new PersonalAccessToken
       {
         Name = request.Name,
         HashedKey = hashedKey,
-        UserId = userId
+        UserId = userId,
+        ExpiresAt = expiresAt
       };
 
       _appDb.PersonalAccessTokens.Add(personalAccessToken);
@@ -65,7 +72,7 @@ public class PersonalAccessTokenManager(
         return Result.Fail("Personal access token not found");
       }
 
-      _appDb.PersonalAccessTokens.Remove(personalAccessToken);
+      personalAccessToken.RevokedAt = _timeProvider.GetUtcNow();
       await _appDb.SaveChangesAsync();
 
       return Result.Ok();
@@ -79,7 +86,7 @@ public class PersonalAccessTokenManager(
   public async Task<IEnumerable<PersonalAccessTokenDto>> GetForUser(Guid userId)
   {
     var personalAccessTokens = await _appDb.PersonalAccessTokens
-      .Where(x => x.UserId == userId)
+      .Where(x => x.UserId == userId && x.RevokedAt == null)
       .OrderByDescending(x => x.CreatedAt)
       .ToListAsync();
 
@@ -96,6 +103,11 @@ public class PersonalAccessTokenManager(
       if (personalAccessToken is null)
       {
         return Result.Fail<PersonalAccessTokenDto>("Personal access token not found");
+      }
+
+      if (personalAccessToken.RevokedAt is not null)
+      {
+        return Result.Fail<PersonalAccessTokenDto>("Personal access token has been revoked");
       }
 
       personalAccessToken.Name = request.Name;
@@ -131,6 +143,18 @@ public class PersonalAccessTokenManager(
         return Result.Fail<PersonalAccessTokenValidationResult>("Invalid personal access token");
       }
 
+      if (storedToken.RevokedAt is not null)
+      {
+        return Result.Fail<PersonalAccessTokenValidationResult>("Personal access token has been revoked");
+      }
+
+      var now = _timeProvider.GetUtcNow();
+      var effectiveExpiry = storedToken.ExpiresAt ?? GetTokenExpiry(storedToken.CreatedAt);
+      if (effectiveExpiry is not null && effectiveExpiry <= now)
+      {
+        return Result.Fail<PersonalAccessTokenValidationResult>("Personal access token has expired");
+      }
+
       var isValid = _passwordHasher.VerifyHashedPassword(string.Empty, storedToken.HashedKey, parts[1]) == PasswordVerificationResult.Success;
 
       if (!isValid)
@@ -139,7 +163,7 @@ public class PersonalAccessTokenManager(
       }
 
       // Update last used timestamp
-      storedToken.LastUsed = _timeProvider.GetUtcNow();
+      storedToken.LastUsed = now;
       await _appDb.SaveChangesAsync();
 
       var result = PersonalAccessTokenValidationResult.Success(storedToken.UserId);
@@ -151,12 +175,26 @@ public class PersonalAccessTokenManager(
     }
   }
 
-  private static PersonalAccessTokenDto MapToDto(PersonalAccessToken personalAccessToken)
+  private PersonalAccessTokenDto MapToDto(PersonalAccessToken personalAccessToken)
   {
+    var expiresAt = personalAccessToken.ExpiresAt ?? GetTokenExpiry(personalAccessToken.CreatedAt);
     return new PersonalAccessTokenDto(
       personalAccessToken.Id,
       personalAccessToken.Name,
       personalAccessToken.CreatedAt,
-      personalAccessToken.LastUsed);
+      personalAccessToken.LastUsed,
+      expiresAt,
+      personalAccessToken.RevokedAt);
+  }
+
+  private DateTimeOffset? GetTokenExpiry(DateTimeOffset referenceTime)
+  {
+    var lifetimeDays = _appOptions.CurrentValue.PersonalAccessTokenLifetimeDays;
+    if (lifetimeDays <= 0)
+    {
+      return null;
+    }
+
+    return referenceTime.AddDays(lifetimeDays);
   }
 }

@@ -1,4 +1,5 @@
 ﻿using System.Net;
+using System.Net.Http;
 using IPNetwork = System.Net.IPNetwork;
 using ControlR.Web.ServiceDefaults;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -298,7 +299,8 @@ public static class WebApplicationBuilderExtensions
         options.RequestHeaders.Add("CF-RAY");
         options.RequestHeaders.Add("CF-IPCountry");
         options.RequestHeaders.Add("CDN-Loop");
-        options.LoggingFields = HttpLoggingFields.All ^ HttpLoggingFields.RequestQuery;
+        options.LoggingFields = HttpLoggingFields.RequestPropertiesAndHeaders
+          | HttpLoggingFields.ResponsePropertiesAndHeaders;
       });
     }
 
@@ -307,7 +309,10 @@ public static class WebApplicationBuilderExtensions
     builder.Services.AddSingleton<IEmailSender<AppUser>, IdentityEmailSender>();
     builder.Services.AddSingleton<IActionVerificationService, ActionVerificationService>();
 
-    builder.Services.AddOutputCache();
+    builder.Services.AddOutputCache(options =>
+    {
+      options.AddPolicy("DeviceGrid", new DeviceGridOutputCachePolicy());
+    });
     builder.Services.AddMemoryCache();
     builder.Services.AddLazyInjection();
     builder.Services.AddHttpContextAccessor();
@@ -348,7 +353,11 @@ public static class WebApplicationBuilderExtensions
     builder.Services.AddSingleton<WebhookDispatcher>();
     builder.Services.AddSingleton<IWebhookDispatcher>(sp => sp.GetRequiredService<WebhookDispatcher>());
     builder.Services.AddHostedService<WebhookDispatcherBackgroundService>();
-    builder.Services.AddHttpClient("Webhook");
+    builder.Services.AddHttpClient("Webhook")
+      .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+      {
+        AllowAutoRedirect = false
+      });
     builder.Services.AddSingleton<IPluginLoaderService, PluginLoaderService>();
     builder.Services.AddSingleton<ICredentialEncryptionService, CredentialEncryptionService>();
     builder.Services.AddHttpClient("Ticketing");
@@ -486,7 +495,7 @@ public static class WebApplicationBuilderExtensions
 
       using var ip6Response = await httpClient.GetAsync("https://www.cloudflare.com/ips-v6");
       ip6Response.EnsureSuccessStatusCode();
-      var ip6Content = await ip4Response.Content.ReadAsStringAsync();
+      var ip6Content = await ip6Response.Content.ReadAsStringAsync();
       var ip6Networks = ip6Content.Split();
 
       string[] ipNetworks = [.. ip4Networks, .. ip6Networks];

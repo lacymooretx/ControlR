@@ -6,7 +6,9 @@ public record PersonalAccessTokenDto(
   Guid Id,
   string Name,
   DateTimeOffset CreatedAt,
-  DateTimeOffset? LastUsed);
+  DateTimeOffset? LastUsed,
+  DateTimeOffset? ExpiresAt = null,
+  DateTimeOffset? RevokedAt = null);
 
 public record CreatePersonalAccessTokenRequestDto(
   [Required]

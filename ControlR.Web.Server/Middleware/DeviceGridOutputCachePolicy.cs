@@ -26,7 +26,8 @@ public class DeviceGridOutputCachePolicy : IOutputCachePolicy
     // Vary by user ID
     if (!context.HttpContext.User.TryGetUserId(out var userId))
     {
-      userId = Guid.NewGuid();
+      context.EnableOutputCaching = false;
+      return;
     }
 
     // Set user tag for cache eviction
@@ -40,9 +41,15 @@ public class DeviceGridOutputCachePolicy : IOutputCachePolicy
     // Keep the global tag as well if needed
     context.Tags.Add("device-grid");
 
-    // Vary by query parameters and headers
+    // Vary by user and tenant to avoid cross-user cache leakage
+    context.CacheVaryByRules.VaryByValues.TryAdd("UserId", userId.ToString());
+    if (tenantId != default)
+    {
+      context.CacheVaryByRules.VaryByValues.TryAdd("TenantId", tenantId.ToString());
+    }
+
+    // Vary by query parameters
     context.CacheVaryByRules.QueryKeys = "*";
-    context.CacheVaryByRules.HeaderNames = new[] { "Authorization" };
 
     // Vary by request hash - computed from the body
     // Note: ASP.NET Core doesn't natively support varying by POST body, so this is a workaround
@@ -55,7 +62,7 @@ public class DeviceGridOutputCachePolicy : IOutputCachePolicy
     var requestHash = ComputeRequestHash(requestBody);
     // Store request hash as a tag to allow for more specific cache invalidation
     context.Tags.Add($"request-{requestHash}");
-    context.CacheVaryByRules.VaryByValues.TryAdd(nameof(DeviceSearchRequestDto), requestBody);
+    context.CacheVaryByRules.VaryByValues.TryAdd(nameof(DeviceSearchRequestDto), requestHash);
 
     // Add custom response header to indicate cache usage
     context.HttpContext.Response.OnStarting(() =>

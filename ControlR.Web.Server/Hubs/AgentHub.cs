@@ -678,8 +678,8 @@ public class AgentHub(
       .ReceiveDeviceUpdate(dto);
 
     // Invalidate the device grid cache using the extension method
-    await _outputCacheStore.InvalidateDeviceCacheAsync(device.Id);
-    _logger.LogDebug("Invalidated device grid cache after device update: {DeviceId}", device.Id);
+    await _outputCacheStore.InvalidateDeviceGridCacheForTenantAsync(device.TenantId);
+    _logger.LogDebug("Invalidated device grid cache after device update for tenant {TenantId}.", device.TenantId);
 
     if (device.Tags is null)
     {

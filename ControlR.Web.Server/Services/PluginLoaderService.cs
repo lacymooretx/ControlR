@@ -159,13 +159,40 @@ public class PluginLoaderService(
 
   private IControlRPlugin? LoadPlugin(PluginRegistration registration)
   {
-    var pluginsBasePath = Path.Combine(
+    var pluginsBasePath = Path.GetFullPath(Path.Combine(
       AppContext.BaseDirectory,
-      "plugins");
+      "plugins"));
+
+    if (Path.IsPathRooted(registration.AssemblyPath))
+    {
+      logger.LogWarning(
+        "Plugin assembly path must be relative to plugins directory. Skipping '{AssemblyPath}' for plugin '{Name}'.",
+        registration.AssemblyPath,
+        registration.Name);
+      return null;
+    }
 
     var assemblyPath = Path.GetFullPath(
       registration.AssemblyPath,
       pluginsBasePath);
+
+    if (!IsSubPathOf(assemblyPath, pluginsBasePath))
+    {
+      logger.LogWarning(
+        "Plugin assembly path '{AssemblyPath}' is outside plugins directory. Skipping plugin '{Name}'.",
+        assemblyPath,
+        registration.Name);
+      return null;
+    }
+
+    if (!string.Equals(Path.GetExtension(assemblyPath), ".dll", StringComparison.OrdinalIgnoreCase))
+    {
+      logger.LogWarning(
+        "Plugin assembly path '{AssemblyPath}' is not a .dll. Skipping plugin '{Name}'.",
+        assemblyPath,
+        registration.Name);
+      return null;
+    }
 
     if (!File.Exists(assemblyPath))
     {
@@ -213,5 +240,17 @@ public class PluginLoaderService(
     }
 
     return instance;
+  }
+
+  private static bool IsSubPathOf(string path, string basePath)
+  {
+    var comparison = OperatingSystem.IsWindows()
+      ? StringComparison.OrdinalIgnoreCase
+      : StringComparison.Ordinal;
+
+    var normalizedBasePath = basePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+      + Path.DirectorySeparatorChar;
+
+    return path.StartsWith(normalizedBasePath, comparison);
   }
 }

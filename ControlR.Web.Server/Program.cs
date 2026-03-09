@@ -9,6 +9,7 @@ using Scalar.AspNetCore;
 using System.Reflection;
 using ControlR.Libraries.Shared.Constants;
 using ControlR.Web.Server.Middleware;
+using Microsoft.AspNetCore.StaticFiles;
 
 var isOpenApiBuild = Assembly.GetEntryAssembly()?.GetName().Name == "GetDocument.Insider";
 var builder = WebApplication.CreateBuilder(args);
@@ -53,12 +54,18 @@ else
 
 app.MapStaticAssets();
 
+var novncContentTypeProvider = new FileExtensionContentTypeProvider();
+novncContentTypeProvider.Mappings[".cur"] = "image/x-icon";
+novncContentTypeProvider.Mappings[".wasm"] = "application/wasm";
+novncContentTypeProvider.Mappings[".map"] = "application/json";
+novncContentTypeProvider.Mappings[".webmanifest"] = "application/manifest+json";
+
 app.UseStaticFiles(new StaticFileOptions
 {
   FileProvider = new PhysicalFileProvider(
     Path.Combine(builder.Environment.ContentRootPath, "novnc")),
   RequestPath = "/novnc",
-  ServeUnknownFileTypes = true,
+  ContentTypeProvider = novncContentTypeProvider
 });
 
 app.MapHub<AgentHub>(AppConstants.AgentHubPath);

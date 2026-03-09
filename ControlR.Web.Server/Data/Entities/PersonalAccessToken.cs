@@ -8,10 +8,12 @@ public class PersonalAccessToken : EntityBase
   [Required]
   [StringLength(256)]
   public required string HashedKey { get; set; }
+  public DateTimeOffset? ExpiresAt { get; set; }
   public DateTimeOffset? LastUsed { get; set; }
   [Required]
   [StringLength(256)]
   public required string Name { get; set; }
+  public DateTimeOffset? RevokedAt { get; set; }
   public AppUser? User { get; set; }
   
   [Required]

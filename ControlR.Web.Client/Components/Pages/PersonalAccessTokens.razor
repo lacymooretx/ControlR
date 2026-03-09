@@ -32,6 +32,25 @@
   <Columns>
     <PropertyColumn Property="x => x.Name" Title="Name" />
     <PropertyColumn Property="x => x.CreatedAt" Title="Created" />
+    <PropertyColumn Property="x => x.ExpiresAt" Title="Expires">
+      <CellTemplate>
+        @if (context.Item.ExpiresAt.HasValue)
+        {
+          if (context.Item.ExpiresAt.Value <= DateTimeOffset.UtcNow)
+          {
+            <MudText Color="Color.Error">Expired</MudText>
+          }
+          else
+          {
+            @context.Item.ExpiresAt.Value
+          }
+        }
+        else
+        {
+          <text>Never</text>
+        }
+      </CellTemplate>
+    </PropertyColumn>
     <PropertyColumn Property="x => x.LastUsed" Title="Last Used">
       <CellTemplate>
         @if (context.Item.LastUsed.HasValue)
