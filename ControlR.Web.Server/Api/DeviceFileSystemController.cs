@@ -737,7 +737,6 @@ public class DeviceFileSystemController : ControllerBase
   // file size limits are checked below.
   [HttpPost("upload/{deviceId:guid}")]
   [DisableRequestSizeLimit]
-  [DisableRequestTimeout]
   public async Task<IActionResult> UploadFile(
     [FromRoute] Guid deviceId,
     [FromServices] AppDb appDb,
