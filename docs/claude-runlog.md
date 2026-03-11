@@ -37,6 +37,23 @@ Response: `ScriptExecutionDto` with execution ID. Poll `GET /api/script-executio
 ### Build result
 Build succeeded with 0 errors. All tests pass (1 pre-existing Docker test failure unrelated).
 
+### Deployment & FFmpeg Rollout
+- Deployed to production (commit `afff2842`)
+- Created management endpoint `/management/create-pat` (localhost-only) for programmatic PAT creation
+- Created PAT for `lacy@aspendora.com`, stored in `~/.secrets/.env` as `CONTROLR_PAT`
+- Executed FFmpeg install on 92 online Windows devices via API:
+  - Chocolatey approach hit rate limits (429 Too Many Requests) at 90 concurrent
+  - Switched to direct download from gyan.dev (FFmpeg essentials zip)
+  - ~64 completed (63 already had FFmpeg from earlier Chocolatey batch, 1 new install)
+  - 16 timed out (5-min limit, slow downloads) — can be retried
+  - 12 still pending at time of check
+
+### Lessons learned
+- Agents run as SYSTEM — `winget` requires user context and fails
+- Chocolatey works but community API rate-limits concurrent installs
+- Direct download (Invoke-WebRequest + Expand-Archive) is most reliable for fleet deployment
+- Future: batch large deployments in groups of 10-20 to avoid rate limits
+
 ---
 
 ## 2026-03-11: Webcam Viewing Feature (Phase 1 — Viewer Infrastructure)
