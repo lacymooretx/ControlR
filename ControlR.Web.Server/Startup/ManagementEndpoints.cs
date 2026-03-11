@@ -13,7 +13,7 @@ public static class ManagementEndpoints
   public static void MapManagementEndpoints(this WebApplication app)
   {
     var group = app.MapGroup("/management")
-      .RequireHost("localhost", "127.0.0.1", "[::1]");
+      .RequireHost("localhost", "127.0.0.1", "::1");
 
     group.MapPost("/create-pat", async (
       [FromBody] CreatePatRequest request,
