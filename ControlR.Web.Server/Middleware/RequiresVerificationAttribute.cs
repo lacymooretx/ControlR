@@ -1,3 +1,4 @@
+using ControlR.Web.Server.Authn;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 
@@ -8,6 +9,15 @@ public class RequiresVerificationAttribute : Attribute, IAsyncActionFilter
 {
   public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
   {
+    // PAT-authenticated requests bypass action verification since the
+    // token itself is a pre-authorized credential.
+    var authMethod = context.HttpContext.User.FindFirst(UserClaimTypes.AuthenticationMethod)?.Value;
+    if (authMethod == PersonalAccessTokenAuthenticationSchemeOptions.DefaultScheme)
+    {
+      await next();
+      return;
+    }
+
     var verificationService = context.HttpContext.RequestServices.GetRequiredService<IActionVerificationService>();
 
     if (!context.HttpContext.User.TryGetUserId(out var userId))

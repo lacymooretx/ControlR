@@ -1,5 +1,44 @@
 # ControlR Deployment Runlog
 
+## 2026-03-11: Script Execution REST API Endpoint
+
+### What was done
+Added `POST /api/script-executions` REST API endpoint to enable programmatic script execution on remote devices. This mirrors the existing ViewerHub.ExecuteScript SignalR method but exposes it as a standard REST endpoint for API/PAT callers.
+
+### Files modified
+- `ControlR.Web.Server/Api/ScriptExecutionsController.cs` — Added `ExecuteScript` POST endpoint with:
+  - Per-device authorization (same DeviceAccessByDeviceResourcePolicy as ViewerHub)
+  - Support for both saved scripts (ScriptId) and ad-hoc scripts (AdHocScriptContent)
+  - Fan-out dispatch to agents via IHubContext<AgentHub>
+  - Audit logging
+  - `[RequiresVerification]` for UI callers, bypassed for PAT callers
+  - `[Authorize(Roles = TenantAdmin, DeviceSuperUser)]`
+
+- `ControlR.Web.Server/Middleware/RequiresVerificationAttribute.cs` — Added PAT bypass:
+  - PAT-authenticated requests skip action verification since the token itself is pre-authorized
+  - Checks `UserClaimTypes.AuthenticationMethod` claim for PAT scheme
+
+### API usage
+```
+POST /api/script-executions
+Authorization: <PAT token>
+Content-Type: application/json
+
+{
+  "ScriptId": null,
+  "AdHocScriptContent": "echo hello",
+  "ScriptType": "bash",
+  "TargetDeviceIds": ["<device-guid>"]
+}
+```
+
+Response: `ScriptExecutionDto` with execution ID. Poll `GET /api/script-executions/{id}` for results.
+
+### Build result
+Build succeeded with 0 errors. All tests pass (1 pre-existing Docker test failure unrelated).
+
+---
+
 ## 2026-03-11: Webcam Viewing Feature (Phase 1 — Viewer Infrastructure)
 
 ### What was done
@@ -71,6 +110,14 @@ Build succeeded with 0 errors.
 
 **Build**: Succeeded with 0 errors
 **Tests**: All passing
+
+### Deployment (Completed)
+- **Commit**: `ac7290e4` — "Add remote webcam viewing feature"
+- **Pushed**: to `origin/main`
+- **Production pull**: `/opt/docker/controlr/source/` on 149.28.251.164
+- **Docker build**: Succeeded (`controlr-aspendora:latest`)
+- **Container restart**: `docker compose down controlr && docker compose up -d controlr` — container running, health starting
+- **Live at**: https://control.aspendora.com
 
 ### Remaining (Future)
 - Native webcam capture (bypass FFmpeg requirement)

@@ -4122,22 +4122,31 @@
         }
       }
     },
-    "/api/script-executions/{executionId}": {
-      "get": {
+    "/api/script-executions": {
+      "post": {
         "tags": [
           "ScriptExecutions"
         ],
-        "parameters": [
-          {
-            "name": "executionId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecuteScriptRequestDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecuteScriptRequestDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecuteScriptRequestDto"
+              }
             }
-          }
-        ],
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "OK",
@@ -4160,9 +4169,7 @@
             }
           }
         }
-      }
-    },
-    "/api/script-executions": {
+      },
       "get": {
         "tags": [
           "ScriptExecutions"
@@ -4205,6 +4212,46 @@
                   "items": {
                     "$ref": "#/components/schemas/ScriptExecutionDto"
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/script-executions/{executionId}": {
+      "get": {
+        "tags": [
+          "ScriptExecutions"
+        ],
+        "parameters": [
+          {
+            "name": "executionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScriptExecutionDto"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScriptExecutionDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScriptExecutionDto"
                 }
               }
             }
@@ -9045,6 +9092,40 @@
           "CDRom",
           "Ram"
         ]
+      },
+      "ExecuteScriptRequestDto": {
+        "required": [
+          "scriptId",
+          "adHocScriptContent",
+          "scriptType",
+          "targetDeviceIds"
+        ],
+        "type": "object",
+        "properties": {
+          "scriptId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "adHocScriptContent": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "scriptType": {
+            "type": "string"
+          },
+          "targetDeviceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
       },
       "FileDeleteRequestDto": {
         "required": [
