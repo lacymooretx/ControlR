@@ -109,6 +109,7 @@ public class ScriptExecutionsController : ControllerBase
     };
 
     await appDb.ScriptExecutions.AddAsync(execution);
+    await appDb.SaveChangesAsync();
 
     // Create result records for each device
     var results = new List<ScriptExecutionResult>();
