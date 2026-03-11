@@ -1332,6 +1332,81 @@ public class ViewerHub(
     return displayName.AsTaskResult();
   }
 
+  public async Task<Result> StartStandaloneWebcam(Guid deviceId, int cameraIndex, int preferredWidth, int preferredHeight)
+  {
+    try
+    {
+      if (await TryAuthorizeAgainstDevice(deviceId) is not { IsSuccess: true } authResult)
+      {
+        return Result.Fail("Unauthorized.");
+      }
+
+      if (string.IsNullOrWhiteSpace(authResult.Value.ConnectionId))
+      {
+        return Result.Fail("Device is not currently connected.");
+      }
+
+      return await _agentHub.Clients
+        .Client(authResult.Value.ConnectionId)
+        .StartStandaloneWebcam(Context.ConnectionId, cameraIndex, preferredWidth, preferredHeight);
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error starting standalone webcam for device {DeviceId}.", deviceId);
+      return Result.Fail("Agent could not be reached.");
+    }
+  }
+
+  public async Task<Result> StopStandaloneWebcam(Guid deviceId)
+  {
+    try
+    {
+      if (await TryAuthorizeAgainstDevice(deviceId) is not { IsSuccess: true } authResult)
+      {
+        return Result.Fail("Unauthorized.");
+      }
+
+      if (string.IsNullOrWhiteSpace(authResult.Value.ConnectionId))
+      {
+        return Result.Fail("Device is not currently connected.");
+      }
+
+      return await _agentHub.Clients
+        .Client(authResult.Value.ConnectionId)
+        .StopStandaloneWebcam(Context.ConnectionId);
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error stopping standalone webcam for device {DeviceId}.", deviceId);
+      return Result.Fail("Agent could not be reached.");
+    }
+  }
+
+  public async Task<Result> GetStandaloneWebcamList(Guid deviceId)
+  {
+    try
+    {
+      if (await TryAuthorizeAgainstDevice(deviceId) is not { IsSuccess: true } authResult)
+      {
+        return Result.Fail("Unauthorized.");
+      }
+
+      if (string.IsNullOrWhiteSpace(authResult.Value.ConnectionId))
+      {
+        return Result.Fail("Device is not currently connected.");
+      }
+
+      return await _agentHub.Clients
+        .Client(authResult.Value.ConnectionId)
+        .GetWebcamList(Context.ConnectionId);
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error getting webcam list for device {DeviceId}.", deviceId);
+      return Result.Fail("Agent could not be reached.");
+    }
+  }
+
   private void AuditHubAction(
     string eventType,
     string action,

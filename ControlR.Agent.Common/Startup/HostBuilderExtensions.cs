@@ -20,6 +20,7 @@ using ControlR.Libraries.Ipc;
 using ControlR.Libraries.DevicesCommon.Services.Processes;
 using ControlR.Libraries.NativeInterop.Unix;
 using ControlR.Agent.Common.Services.FileManager;
+using ControlR.Libraries.DevicesCommon.Services;
 using ControlR.Libraries.Shared.Hubs.Clients;
 using ControlR.Libraries.Shared.Helpers;
 
@@ -106,6 +107,7 @@ internal static class HostApplicationBuilderExtensions
     services.AddSingleton<IScriptRunner, ScriptRunner>();
     services.AddSingleton<IDesktopClientUpdater, DesktopClientUpdater>();
     services.AddSingleton<IAgentHeartbeatTimer, AgentHeartbeatTimer>();
+    services.AddSingleton<IWebcamCapturer, WebcamCapturer>();
     services.AddSingleton<IFileSystemPathProvider, FileSystemPathProvider>();
     services.AddControlrIpcServer<AgentRpcService>();
     services.AddStronglyTypedSignalrClient<IAgentHub, IAgentHubClient, AgentHubClient>(ServiceLifetime.Singleton);

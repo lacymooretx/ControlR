@@ -1,0 +1,83 @@
+@using ControlR.Libraries.Shared.Hubs
+@using ControlR.Libraries.Signalr.Client.Extensions
+@using Bitbound.SimpleMessenger
+@using ControlR.Libraries.Messenger.Extensions.Messages
+
+<MudPaper Class="pa-4 mt-4" Elevation="2">
+  <div class="d-flex align-center justify-space-between mb-2">
+    <MudText Typo="Typo.h6" Color="Color.Primary">Camera</MudText>
+    <div class="d-flex align-center gap-2">
+      @if (_cameras.Length > 1)
+      {
+        <MudSelect T="int" Value="_selectedCameraIndex" ValueChanged="HandleCameraChanged"
+                   Label="Camera" Variant="Variant.Outlined" Dense Margin="Margin.Dense"
+                   Style="min-width: 200px;">
+          @foreach (var camera in _cameras)
+          {
+            <MudSelectItem Value="camera.Index">@camera.Name</MudSelectItem>
+          }
+        </MudSelect>
+      }
+      <MudToggleIconButton Toggled="_isStreaming"
+                           ToggledChanged="HandleToggle"
+                           Icon="@Icons.Material.Filled.Videocam"
+                           ToggledIcon="@Icons.Material.Filled.VideocamOff"
+                           Color="Color.Success"
+                           ToggledColor="Color.Error"
+                           Size="Size.Medium"
+                           title="@(_isStreaming ? "Stop Camera" : "Start Camera")" />
+    </div>
+  </div>
+
+  @if (_isStreaming)
+  {
+    <div class="webcam-container">
+      @if (!string.IsNullOrEmpty(_webcamImageDataUri))
+      {
+        <img src="@_webcamImageDataUri" alt="Webcam" class="webcam-image" />
+      }
+      else
+      {
+        <div class="webcam-loading">
+          <MudProgressCircular Indeterminate Color="Color.Primary" Size="Size.Large" />
+          <MudText Typo="Typo.body2" Class="mt-2">Connecting to camera...</MudText>
+        </div>
+      }
+    </div>
+  }
+  else if (_cameras.Length == 0 && _cameraListRequested)
+  {
+    <MudAlert Severity="Severity.Info" Dense Class="mt-2">
+      No cameras detected on this device. FFmpeg may not be installed.
+    </MudAlert>
+  }
+</MudPaper>
+
+<style>
+  .webcam-container {
+    position: relative;
+    width: 100%;
+    max-width: 640px;
+    background: #000;
+    border-radius: 4px;
+    overflow: hidden;
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .webcam-image {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  .webcam-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+  }
+</style>

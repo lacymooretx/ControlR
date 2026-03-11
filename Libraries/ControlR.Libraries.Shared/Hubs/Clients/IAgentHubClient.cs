@@ -49,4 +49,8 @@ public interface IAgentHubClient : IHubClient
   Task UninstallAgent(string reason);
   Task<Result<FileDownloadResponseHubDto>> UploadFileToViewer(FileDownloadHubDto dto);
   Task<ValidateFilePathResponseDto> ValidateFilePath(ValidateFilePathHubDto dto);
+
+  Task<Result> StartStandaloneWebcam(string viewerConnectionId, int cameraIndex, int preferredWidth, int preferredHeight);
+  Task<Result> StopStandaloneWebcam(string viewerConnectionId);
+  Task<Result> GetWebcamList(string viewerConnectionId);
 }

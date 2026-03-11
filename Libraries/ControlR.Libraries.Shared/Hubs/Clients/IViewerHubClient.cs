@@ -15,4 +15,7 @@ public interface IViewerHubClient
   Task ReceiveServerStats(ServerStatsDto serverStats);
   Task ReceivePtyOutput(PtyOutputDto output);
   Task ReceiveTerminalOutput(TerminalOutputDto output);
+
+  Task ReceiveStandaloneWebcamFrame(StandaloneWebcamFrameDto frame);
+  Task ReceiveStandaloneWebcamList(WebcamInfoDto[] cameras);
 }

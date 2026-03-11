@@ -19,4 +19,7 @@ public interface IAgentHub
   Task ReportPatchScanResult(PatchScanResultHubDto result);
   Task ReportPatchInstallResult(PatchInstallResultHubDto result);
   Task<Result<DeviceResponseDto>> UpdateDevice(DeviceUpdateRequestDto agentDto);
+
+  Task SendStandaloneWebcamFrame(string viewerConnectionId, StandaloneWebcamFrameDto frame);
+  Task SendStandaloneWebcamList(string viewerConnectionId, WebcamInfoDto[] cameras);
 }

@@ -766,3 +766,30 @@ All 20 features from the ScreenConnect/TeamViewer/LogMeIn/Splashtop/AnyDesk gap 
 - [x] Server image rebuilt and deployed (`controlr-aspendora:latest`)
 - [x] Container healthy, branding assets verified on https://control.aspendora.com
 - [ ] Run full CI build workflow to verify Windows + macOS signing end-to-end
+
+---
+
+## Standalone Camera Viewer
+**Status:** Complete — Awaiting Approval
+**Started:** 2026-03-11
+
+### Feature: Standalone webcam viewer on device overview page
+- Camera viewer placed below the metrics charts (CPU/Memory/Storage) on the Overview page
+- No remote control session or desktop connection required
+- No notification sent to end user
+- Multiple camera support with dropdown switcher
+- Uses FFmpeg on the agent side (same as remote control webcam)
+- Streams JPEG frames at 5fps through SignalR hub methods
+
+### Architecture
+- **Shared DTOs**: StandaloneWebcamFrameDto, WebcamInfoDto
+- **Hub interfaces**: 3 new ViewerHub methods, 3 new AgentHubClient methods, 2 new AgentHub relay methods, 2 new ViewerHubClient callbacks
+- **WebcamCapturer**: Moved from DesktopClient.Common to Libraries.DevicesCommon (shared by both Agent and DesktopClient)
+- **Camera enumeration**: Platform-specific (DirectShow on Windows, AVFoundation on macOS, V4L2 on Linux)
+- **Agent**: ConcurrentDictionary tracks active webcam sessions per viewer, fire-and-forget streaming task
+
+### Build Verification
+- All projects compile with 0 errors
+- Tested: Libraries.Shared, Libraries.DevicesCommon, Agent.Common, DesktopClient.Common, Agent, Web.Server
+
+**PHASE COMPLETE — awaiting approval to proceed with deployment.**

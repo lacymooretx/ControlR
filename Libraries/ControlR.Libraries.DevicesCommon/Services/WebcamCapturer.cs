@@ -1,9 +1,9 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using ControlR.DesktopClient.Common.ServiceInterfaces;
+using ControlR.Libraries.Shared.Dtos.HubDtos;
 using Microsoft.Extensions.Logging;
 
-namespace ControlR.DesktopClient.Common.Services;
+namespace ControlR.Libraries.DevicesCommon.Services;
 
 public class WebcamCapturer(ILogger<WebcamCapturer> logger) : IWebcamCapturer
 {
@@ -13,6 +13,39 @@ public class WebcamCapturer(ILogger<WebcamCapturer> logger) : IWebcamCapturer
   public bool IsAvailable()
   {
     return FindFfmpeg() is not null;
+  }
+
+  public async Task<WebcamInfoDto[]> EnumerateCameras()
+  {
+    var ffmpegPath = FindFfmpeg();
+    if (ffmpegPath is null)
+    {
+      return [];
+    }
+
+    try
+    {
+      if (OperatingSystem.IsWindows())
+      {
+        return await EnumerateWindowsCameras(ffmpegPath);
+      }
+
+      if (OperatingSystem.IsMacOS())
+      {
+        return await EnumerateMacCameras(ffmpegPath);
+      }
+
+      if (OperatingSystem.IsLinux())
+      {
+        return EnumerateLinuxCameras();
+      }
+    }
+    catch (Exception ex)
+    {
+      _logger.LogWarning(ex, "Failed to enumerate cameras.");
+    }
+
+    return [new WebcamInfoDto(0, "Default Camera")];
   }
 
   public async IAsyncEnumerable<byte[]> CaptureFrames(
@@ -95,7 +128,6 @@ public class WebcamCapturer(ILogger<WebcamCapturer> logger) : IWebcamCapturer
       return _ffmpegPath;
     }
 
-    // Check common locations based on platform.
     string[] candidates;
 
     if (OperatingSystem.IsWindows())
@@ -164,15 +196,12 @@ public class WebcamCapturer(ILogger<WebcamCapturer> logger) : IWebcamCapturer
 
   private string BuildFfmpegArgs(int width, int height, int cameraIndex)
   {
-    // Platform-specific input format and device naming.
     string inputFormat;
     string device;
     string extraInputArgs = string.Empty;
 
     if (OperatingSystem.IsWindows())
     {
-      // DirectShow requires the device name, not a numeric index.
-      // Try to get the device name, fall back to a generic name.
       var deviceName = GetWindowsWebcamDevice(cameraIndex);
       inputFormat = "dshow";
       device = $"video={deviceName}";
@@ -180,14 +209,12 @@ public class WebcamCapturer(ILogger<WebcamCapturer> logger) : IWebcamCapturer
     }
     else if (OperatingSystem.IsMacOS())
     {
-      // AVFoundation accepts numeric device index.
       inputFormat = "avfoundation";
       device = $"{cameraIndex}:none";
       extraInputArgs = $"-video_size {width}x{height} ";
     }
     else
     {
-      // V4L2 uses /dev/videoN device paths.
       inputFormat = "v4l2";
       device = $"/dev/video{cameraIndex}";
       extraInputArgs = $"-video_size {width}x{height} ";
@@ -200,7 +227,6 @@ public class WebcamCapturer(ILogger<WebcamCapturer> logger) : IWebcamCapturer
 
   private string GetWindowsWebcamDevice(int cameraIndex)
   {
-    // Try to enumerate DirectShow devices via FFmpeg.
     var ffmpegPath = FindFfmpeg();
     if (ffmpegPath is null)
     {
@@ -209,48 +235,19 @@ public class WebcamCapturer(ILogger<WebcamCapturer> logger) : IWebcamCapturer
 
     try
     {
-      using var process = new Process();
-      process.StartInfo = new ProcessStartInfo
-      {
-        FileName = ffmpegPath,
-        Arguments = "-list_devices true -f dshow -i dummy",
-        UseShellExecute = false,
-        RedirectStandardOutput = true,
-        RedirectStandardError = true,
-        CreateNoWindow = true
-      };
+      var devices = GetWindowsVideoDevices(ffmpegPath);
 
-      process.Start();
-      var stderr = process.StandardError.ReadToEnd();
-      process.WaitForExit(5000);
-
-      // Parse device list from stderr. Lines look like:
-      //  [dshow @ ...] "Device Name" (video)
-      var videoDevices = new List<string>();
-      foreach (var line in stderr.Split('\n'))
+      if (cameraIndex < devices.Count)
       {
-        if (line.Contains("(video)"))
-        {
-          var start = line.IndexOf('"');
-          var end = line.IndexOf('"', start + 1);
-          if (start >= 0 && end > start)
-          {
-            videoDevices.Add(line.Substring(start + 1, end - start - 1));
-          }
-        }
+        _logger.LogInformation("Found Windows webcam device: {DeviceName}", devices[cameraIndex]);
+        return devices[cameraIndex];
       }
 
-      if (cameraIndex < videoDevices.Count)
-      {
-        _logger.LogInformation("Found Windows webcam device: {DeviceName}", videoDevices[cameraIndex]);
-        return videoDevices[cameraIndex];
-      }
-
-      if (videoDevices.Count > 0)
+      if (devices.Count > 0)
       {
         _logger.LogWarning("Camera index {Index} out of range. Using first device: {DeviceName}",
-          cameraIndex, videoDevices[0]);
-        return videoDevices[0];
+          cameraIndex, devices[0]);
+        return devices[0];
       }
     }
     catch (Exception ex)
@@ -259,6 +256,123 @@ public class WebcamCapturer(ILogger<WebcamCapturer> logger) : IWebcamCapturer
     }
 
     return "Integrated Camera";
+  }
+
+  private List<string> GetWindowsVideoDevices(string ffmpegPath)
+  {
+    using var process = new Process();
+    process.StartInfo = new ProcessStartInfo
+    {
+      FileName = ffmpegPath,
+      Arguments = "-list_devices true -f dshow -i dummy",
+      UseShellExecute = false,
+      RedirectStandardOutput = true,
+      RedirectStandardError = true,
+      CreateNoWindow = true
+    };
+
+    process.Start();
+    var stderr = process.StandardError.ReadToEnd();
+    process.WaitForExit(5000);
+
+    var videoDevices = new List<string>();
+    foreach (var line in stderr.Split('\n'))
+    {
+      if (line.Contains("(video)"))
+      {
+        var start = line.IndexOf('"');
+        var end = line.IndexOf('"', start + 1);
+        if (start >= 0 && end > start)
+        {
+          videoDevices.Add(line.Substring(start + 1, end - start - 1));
+        }
+      }
+    }
+
+    return videoDevices;
+  }
+
+  private async Task<WebcamInfoDto[]> EnumerateWindowsCameras(string ffmpegPath)
+  {
+    var devices = await Task.Run(() => GetWindowsVideoDevices(ffmpegPath));
+    if (devices.Count == 0)
+    {
+      return [];
+    }
+
+    return devices.Select((name, index) => new WebcamInfoDto(index, name)).ToArray();
+  }
+
+  private async Task<WebcamInfoDto[]> EnumerateMacCameras(string ffmpegPath)
+  {
+    using var process = new Process();
+    process.StartInfo = new ProcessStartInfo
+    {
+      FileName = ffmpegPath,
+      Arguments = "-f avfoundation -list_devices true -i \"\"",
+      UseShellExecute = false,
+      RedirectStandardOutput = true,
+      RedirectStandardError = true,
+      CreateNoWindow = true
+    };
+
+    process.Start();
+    var stderr = await process.StandardError.ReadToEndAsync();
+    process.WaitForExit(5000);
+
+    var cameras = new List<WebcamInfoDto>();
+    var inVideoSection = false;
+
+    foreach (var line in stderr.Split('\n'))
+    {
+      if (line.Contains("AVFoundation video devices:"))
+      {
+        inVideoSection = true;
+        continue;
+      }
+
+      if (line.Contains("AVFoundation audio devices:"))
+      {
+        break;
+      }
+
+      if (inVideoSection && line.Contains(']'))
+      {
+        // Lines look like: [AVFoundation ...] [0] FaceTime HD Camera
+        var bracketStart = line.LastIndexOf('[');
+        var bracketEnd = line.LastIndexOf(']');
+        if (bracketStart >= 0 && bracketEnd > bracketStart)
+        {
+          var indexStr = line.Substring(bracketStart + 1, bracketEnd - bracketStart - 1);
+          if (int.TryParse(indexStr, out var index))
+          {
+            var name = line[(bracketEnd + 1)..].Trim();
+            if (!string.IsNullOrEmpty(name))
+            {
+              cameras.Add(new WebcamInfoDto(index, name));
+            }
+          }
+        }
+      }
+    }
+
+    return cameras.ToArray();
+  }
+
+  private static WebcamInfoDto[] EnumerateLinuxCameras()
+  {
+    var cameras = new List<WebcamInfoDto>();
+
+    for (var i = 0; i < 10; i++)
+    {
+      var devicePath = $"/dev/video{i}";
+      if (File.Exists(devicePath))
+      {
+        cameras.Add(new WebcamInfoDto(i, $"Camera {i} ({devicePath})"));
+      }
+    }
+
+    return cameras.ToArray();
   }
 
   private static async IAsyncEnumerable<byte[]> ParseMjpegStream(

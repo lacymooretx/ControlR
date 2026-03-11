@@ -1,5 +1,49 @@
 # ControlR Deployment Runlog
 
+## 2026-03-11: Standalone Camera Viewer on Device Overview Page
+
+### What was done
+Implemented a standalone webcam viewer on the device overview page that works without launching a remote control session and sends no notification to the end user. Supports multiple cameras with switching.
+
+### Architecture
+- **Hub flow**: Viewer → ViewerHub → AgentHub → Agent (start/stop/enumerate cameras)
+- **Frame flow**: Agent → AgentHub → ViewerHub → Viewer (JPEG frames at 5fps via SignalR)
+- **No relay stream needed** — uses direct SignalR hub method calls
+
+### Files Created
+- `Libraries/ControlR.Libraries.DevicesCommon/Services/IWebcamCapturer.cs` — Shared interface with CaptureFrames, IsAvailable, EnumerateCameras
+- `Libraries/ControlR.Libraries.DevicesCommon/Services/WebcamCapturer.cs` — FFmpeg-based implementation (moved from DesktopClient.Common)
+- `Libraries/ControlR.Libraries.Shared/Dtos/HubDtos/StandaloneWebcamHubDto.cs` — StandaloneWebcamFrameDto, WebcamInfoDto
+- `ControlR.Web.Client/Components/Pages/DeviceAccess/StandaloneWebcamViewer.razor` — Blazor component
+- `ControlR.Web.Client/Components/Pages/DeviceAccess/StandaloneWebcamViewer.razor.cs` — Component code-behind
+
+### Files Modified
+- `Libraries/ControlR.Libraries.Shared/Hubs/IViewerHub.cs` — Added StartStandaloneWebcam, StopStandaloneWebcam, GetStandaloneWebcamList
+- `Libraries/ControlR.Libraries.Shared/Hubs/IAgentHub.cs` — Added SendStandaloneWebcamFrame, SendStandaloneWebcamList
+- `Libraries/ControlR.Libraries.Shared/Hubs/Clients/IAgentHubClient.cs` — Added StartStandaloneWebcam, StopStandaloneWebcam, GetWebcamList
+- `Libraries/ControlR.Libraries.Shared/Hubs/Clients/IViewerHubClient.cs` — Added ReceiveStandaloneWebcamFrame, ReceiveStandaloneWebcamList
+- `ControlR.Web.Server/Hubs/ViewerHub.cs` — Implemented 3 standalone webcam hub methods
+- `ControlR.Web.Server/Hubs/AgentHub.cs` — Implemented 2 relay methods
+- `ControlR.Web.Client/Services/ViewerHubClient.cs` — Added 2 callback handlers
+- `ControlR.Agent.Common/Services/AgentHubClient.cs` — Added webcam capture handlers + IWebcamCapturer dependency
+- `ControlR.Agent.Common/Startup/HostBuilderExtensions.cs` — Registered IWebcamCapturer in DI
+- `ControlR.DesktopClient.Common/Services/DesktopRemoteControlStream.cs` — Updated using for moved IWebcamCapturer
+- `ControlR.Web.Client/Components/Pages/DeviceAccess/Overview.razor` — Added StandaloneWebcamViewer below DeviceOverviewGrid
+
+### Files Removed
+- `ControlR.DesktopClient.Common/ServiceInterfaces/IWebcamCapturer.cs` — Moved to DevicesCommon
+- `ControlR.DesktopClient.Common/Services/WebcamCapturer.cs` — Moved to DevicesCommon
+
+### Build Verification
+- All projects build successfully with 0 errors
+- ControlR.Libraries.Shared, ControlR.Libraries.DevicesCommon, ControlR.Agent.Common, ControlR.DesktopClient.Common, ControlR.Agent, ControlR.Web.Server — all pass
+
+### Next Steps
+- [ ] Docker build and deploy to production
+- [ ] Test with a device that has a camera
+
+---
+
 ## 2026-03-11: Script Execution REST API Endpoint
 
 ### What was done

@@ -65,4 +65,14 @@ public class ViewerHubClient(IMessenger messenger)
   {
     await _messenger.Send(new DtoReceivedMessage<TerminalOutputDto>(output));
   }
+
+  public async Task ReceiveStandaloneWebcamFrame(StandaloneWebcamFrameDto frame)
+  {
+    await _messenger.Send(new DtoReceivedMessage<StandaloneWebcamFrameDto>(frame));
+  }
+
+  public async Task ReceiveStandaloneWebcamList(WebcamInfoDto[] cameras)
+  {
+    await _messenger.Send(new DtoReceivedMessage<WebcamInfoDto[]>(cameras));
+  }
 }

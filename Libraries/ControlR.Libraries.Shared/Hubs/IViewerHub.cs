@@ -46,4 +46,8 @@ public interface IViewerHub
   Task<Result> RequestPatchScan(Guid deviceId);
   Task<Result> RequestPatchInstall(Guid deviceId, string[] updateIds);
   Task<Result> UploadFile(FileUploadMetadata metadata, ChannelReader<byte[]> fileStream);
+
+  Task<Result> StartStandaloneWebcam(Guid deviceId, int cameraIndex, int preferredWidth, int preferredHeight);
+  Task<Result> StopStandaloneWebcam(Guid deviceId);
+  Task<Result> GetStandaloneWebcamList(Guid deviceId);
 }

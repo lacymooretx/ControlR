@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using ControlR.Libraries.Shared.Dtos.HubDtos;
+using ControlR.Libraries.Shared.Dtos.ServerApi;
 using ControlR.Libraries.Shared.Hubs.Clients;
 using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.AspNetCore.SignalR;
@@ -503,6 +504,34 @@ public class AgentHub(
     catch (Exception ex)
     {
       _logger.LogError(ex, "Error while sending terminal output to viewer.");
+    }
+  }
+
+  public async Task SendStandaloneWebcamFrame(string viewerConnectionId, StandaloneWebcamFrameDto frame)
+  {
+    try
+    {
+      await _viewerHub.Clients
+        .Client(viewerConnectionId)
+        .ReceiveStandaloneWebcamFrame(frame);
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while sending standalone webcam frame to viewer.");
+    }
+  }
+
+  public async Task SendStandaloneWebcamList(string viewerConnectionId, WebcamInfoDto[] cameras)
+  {
+    try
+    {
+      await _viewerHub.Clients
+        .Client(viewerConnectionId)
+        .ReceiveStandaloneWebcamList(cameras);
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while sending webcam list to viewer.");
     }
   }
 

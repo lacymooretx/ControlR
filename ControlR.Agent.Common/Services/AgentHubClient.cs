@@ -1,9 +1,11 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Threading.Channels;
 using ControlR.Agent.Common.Interfaces;
 using ControlR.Agent.Common.Models.Messages;
 using ControlR.Agent.Common.Services.FileManager;
 using ControlR.Agent.Common.Services.Terminal;
+using ControlR.Libraries.DevicesCommon.Services;
 using ControlR.Libraries.DevicesCommon.Services.Processes;
 using ControlR.Libraries.Shared.Constants;
 using ControlR.Libraries.Shared.Dtos.Devices;
@@ -41,6 +43,7 @@ internal class AgentHubClient(
   IWakeOnLanService wakeOnLan,
   IScriptRunner scriptRunner,
   IAgentHeartbeatTimer heartbeatTimer,
+  IWebcamCapturer webcamCapturer,
   ILogger<AgentHubClient> logger) : IAgentHubClient
 {
   private readonly IAgentUpdater _agentUpdater = agentUpdater;
@@ -63,6 +66,8 @@ internal class AgentHubClient(
   private readonly ISystemEnvironment _systemEnvironment = systemEnvironment;
   private readonly ITerminalStore _terminalStore = terminalStore;
   private readonly IWakeOnLanService _wakeOnLan = wakeOnLan;
+  private readonly IWebcamCapturer _webcamCapturer = webcamCapturer;
+  private readonly ConcurrentDictionary<string, CancellationTokenSource> _standaloneWebcamSessions = new();
 
   public async Task<Result> CloseChatSession(Guid sessionId, int targetProcessId)
   {
@@ -1242,6 +1247,104 @@ Write-Output ""INSTALLED:$Installed,FAILED:$Failed""
       _logger.LogError(ex, "Error while validating file path: {FileName} in {DirectoryPath}", dto.FileName,
         dto.DirectoryPath);
       return new ValidateFilePathResponseDto(false, "An error occurred while validating file path.");
+    }
+  }
+
+  public async Task<Result> StartStandaloneWebcam(string viewerConnectionId, int cameraIndex, int preferredWidth, int preferredHeight)
+  {
+    try
+    {
+      _logger.LogInformation(
+        "Standalone webcam requested by viewer {ViewerConnectionId}. Camera: {CameraIndex}",
+        viewerConnectionId, cameraIndex);
+
+      if (!_webcamCapturer.IsAvailable())
+      {
+        _logger.LogWarning("FFmpeg not available on this device. Cannot start webcam.");
+        return Result.Fail("FFmpeg is not available on this device.");
+      }
+
+      // Stop existing session for this viewer if any
+      if (_standaloneWebcamSessions.TryRemove(viewerConnectionId, out var existingCts))
+      {
+        await existingCts.CancelAsync();
+        existingCts.Dispose();
+      }
+
+      var cts = new CancellationTokenSource();
+      _standaloneWebcamSessions[viewerConnectionId] = cts;
+
+      // Fire and forget the streaming task
+      _ = Task.Run(async () =>
+      {
+        try
+        {
+          await foreach (var jpegData in _webcamCapturer.CaptureFrames(
+            preferredWidth, preferredHeight, cameraIndex, cts.Token))
+          {
+            var frame = new StandaloneWebcamFrameDto(jpegData, preferredWidth, preferredHeight);
+            await _hubConnection.Server.SendStandaloneWebcamFrame(viewerConnectionId, frame);
+          }
+        }
+        catch (OperationCanceledException)
+        {
+          _logger.LogInformation("Standalone webcam stream stopped for viewer {ViewerConnectionId}.", viewerConnectionId);
+        }
+        catch (Exception ex)
+        {
+          _logger.LogError(ex, "Error streaming standalone webcam to viewer {ViewerConnectionId}.", viewerConnectionId);
+        }
+        finally
+        {
+          _standaloneWebcamSessions.TryRemove(viewerConnectionId, out _);
+        }
+      }, cts.Token);
+
+      return Result.Ok();
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error starting standalone webcam.");
+      return Result.Fail("An error occurred while starting webcam.");
+    }
+  }
+
+  public async Task<Result> StopStandaloneWebcam(string viewerConnectionId)
+  {
+    try
+    {
+      _logger.LogInformation("Stopping standalone webcam for viewer {ViewerConnectionId}.", viewerConnectionId);
+
+      if (_standaloneWebcamSessions.TryRemove(viewerConnectionId, out var cts))
+      {
+        await cts.CancelAsync();
+        cts.Dispose();
+      }
+
+      return Result.Ok();
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error stopping standalone webcam.");
+      return Result.Fail("An error occurred while stopping webcam.");
+    }
+  }
+
+  public async Task<Result> GetWebcamList(string viewerConnectionId)
+  {
+    try
+    {
+      _logger.LogInformation("Enumerating webcams for viewer {ViewerConnectionId}.", viewerConnectionId);
+
+      var cameras = await _webcamCapturer.EnumerateCameras();
+      await _hubConnection.Server.SendStandaloneWebcamList(viewerConnectionId, cameras);
+
+      return Result.Ok();
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error enumerating webcams.");
+      return Result.Fail("An error occurred while enumerating webcams.");
     }
   }
 
