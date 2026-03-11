@@ -313,6 +313,7 @@ public static class WebApplicationBuilderExtensions
     {
       options.AddPolicy("DeviceGrid", new DeviceGridOutputCachePolicy());
     });
+    builder.Services.AddRequestTimeouts();
     builder.Services.AddMemoryCache();
     builder.Services.AddLazyInjection();
     builder.Services.AddHttpContextAccessor();

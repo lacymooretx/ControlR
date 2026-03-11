@@ -70,6 +70,7 @@ app.UseStaticFiles(new StaticFileOptions
 
 app.MapHub<AgentHub>(AppConstants.AgentHubPath);
 
+app.UseRequestTimeouts();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<TotpEnforcementMiddleware>();
