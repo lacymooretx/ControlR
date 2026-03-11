@@ -29,6 +29,10 @@
     VNC Relay
   </MudNavLink>
 
+  <MudNavLink Disabled="IsDisabled" Href='@($"/device-access/camera?deviceId={GetDeviceId()}")' Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Videocam">
+    Camera
+  </MudNavLink>
+
   @*
   <MudNavLink Disabled="IsDisabled" Href="/device-access/processes" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.MonitorHeart">
     Processes

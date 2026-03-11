@@ -3,6 +3,7 @@ using ControlR.Libraries.Messenger.Extensions.Messages;
 using ControlR.Libraries.Shared.Dtos.HubDtos;
 using ControlR.Libraries.Shared.Hubs;
 using ControlR.Libraries.Signalr.Client.Extensions;
+using ControlR.Libraries.Viewer.Common.State;
 using Microsoft.AspNetCore.Components;
 
 namespace ControlR.Web.Client.Components.Pages.DeviceAccess;
@@ -13,11 +14,13 @@ public partial class StandaloneWebcamViewer : ComponentBase, IDisposable
   private string? _webcamImageDataUri;
   private WebcamInfoDto[] _cameras = [];
   private int _selectedCameraIndex;
-  private bool _cameraListRequested;
+  private bool _cameraListReceived;
 
-  [Parameter]
-  [EditorRequired]
-  public required Guid DeviceId { get; set; }
+  [Inject]
+  public required IDeviceState DeviceAccessState { get; init; }
+
+  [SupplyParameterFromQuery]
+  public required Guid DeviceId { get; init; }
 
   [Inject]
   public required IMessenger Messenger { get; init; }
@@ -39,9 +42,8 @@ public partial class StandaloneWebcamViewer : ComponentBase, IDisposable
 
   protected override async Task OnAfterRenderAsync(bool firstRender)
   {
-    if (firstRender && !_cameraListRequested)
+    if (firstRender)
     {
-      _cameraListRequested = true;
       await RequestCameraList();
     }
   }
@@ -56,18 +58,6 @@ public partial class StandaloneWebcamViewer : ComponentBase, IDisposable
     }
 
     GC.SuppressFinalize(this);
-  }
-
-  private async Task HandleToggle(bool toggled)
-  {
-    if (toggled)
-    {
-      await StartWebcam();
-    }
-    else
-    {
-      await StopWebcam();
-    }
   }
 
   private async Task HandleCameraChanged(int newIndex)
@@ -85,15 +75,22 @@ public partial class StandaloneWebcamViewer : ComponentBase, IDisposable
   {
     try
     {
+      _cameraListReceived = false;
+      await InvokeAsync(StateHasChanged);
+
       var result = await ViewerHub.Server.GetStandaloneWebcamList(DeviceId);
       if (!result.IsSuccess)
       {
         Logger.LogWarning("Failed to get camera list: {Reason}", result.Reason);
+        _cameraListReceived = true;
+        await InvokeAsync(StateHasChanged);
       }
     }
     catch (Exception ex)
     {
       Logger.LogError(ex, "Error requesting camera list.");
+      _cameraListReceived = true;
+      await InvokeAsync(StateHasChanged);
     }
   }
 
@@ -102,26 +99,25 @@ public partial class StandaloneWebcamViewer : ComponentBase, IDisposable
     try
     {
       _webcamImageDataUri = null;
+      _isStreaming = true;
+      await InvokeAsync(StateHasChanged);
+
       var result = await ViewerHub.Server.StartStandaloneWebcam(
         DeviceId, _selectedCameraIndex, 640, 480);
 
-      if (result.IsSuccess)
-      {
-        _isStreaming = true;
-      }
-      else
+      if (!result.IsSuccess)
       {
         Snackbar.Add($"Failed to start camera: {result.Reason}", Severity.Error);
         _isStreaming = false;
+        await InvokeAsync(StateHasChanged);
       }
-
-      await InvokeAsync(StateHasChanged);
     }
     catch (Exception ex)
     {
       Logger.LogError(ex, "Error starting webcam.");
       Snackbar.Add("Failed to start camera", Severity.Error);
       _isStreaming = false;
+      await InvokeAsync(StateHasChanged);
     }
   }
 
@@ -131,14 +127,13 @@ public partial class StandaloneWebcamViewer : ComponentBase, IDisposable
     {
       _isStreaming = false;
       _webcamImageDataUri = null;
+      await InvokeAsync(StateHasChanged);
 
       var result = await ViewerHub.Server.StopStandaloneWebcam(DeviceId);
       if (!result.IsSuccess)
       {
         Logger.LogWarning("Failed to stop webcam: {Reason}", result.Reason);
       }
-
-      await InvokeAsync(StateHasChanged);
     }
     catch (Exception ex)
     {
@@ -162,6 +157,7 @@ public partial class StandaloneWebcamViewer : ComponentBase, IDisposable
   private async Task HandleWebcamList(object subscriber, DtoReceivedMessage<WebcamInfoDto[]> message)
   {
     _cameras = message.Dto;
+    _cameraListReceived = true;
     if (_cameras.Length > 0 && _selectedCameraIndex >= _cameras.Length)
     {
       _selectedCameraIndex = 0;

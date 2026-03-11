@@ -1,37 +1,52 @@
+@attribute [Route(ClientRoutes.DeviceAccessCamera)]
+@layout DeviceAccessLayout
+@using ControlR.Web.Client.Components.Layout.DeviceAccess
 @using ControlR.Libraries.Shared.Hubs
 @using ControlR.Libraries.Signalr.Client.Extensions
 @using Bitbound.SimpleMessenger
 @using ControlR.Libraries.Messenger.Extensions.Messages
+@attribute [Authorize]
 
-<MudPaper Class="pa-4 mt-4" Elevation="2">
-  <div class="d-flex align-center justify-space-between mb-2">
-    <MudText Typo="Typo.h6" Color="Color.Primary">Camera</MudText>
-    <div class="d-flex align-center gap-2">
+<div class="h-100 w-100 d-flex flex-column pa-4">
+  <div class="d-flex align-center justify-space-between mb-4">
+    <MudText Typo="Typo.h4" Color="Color.Primary">Camera</MudText>
+    <div class="d-flex align-center gap-4">
       @if (_cameras.Length > 1)
       {
         <MudSelect T="int" Value="_selectedCameraIndex" ValueChanged="HandleCameraChanged"
                    Label="Camera" Variant="Variant.Outlined" Dense Margin="Margin.Dense"
-                   Style="min-width: 200px;">
+                   Style="min-width: 240px;">
           @foreach (var camera in _cameras)
           {
             <MudSelectItem Value="camera.Index">@camera.Name</MudSelectItem>
           }
         </MudSelect>
       }
-      <MudToggleIconButton Toggled="_isStreaming"
-                           ToggledChanged="HandleToggle"
-                           Icon="@Icons.Material.Filled.Videocam"
-                           ToggledIcon="@Icons.Material.Filled.VideocamOff"
-                           Color="Color.Success"
-                           ToggledColor="Color.Error"
-                           Size="Size.Medium"
-                           title="@(_isStreaming ? "Stop Camera" : "Start Camera")" />
+      else if (_cameras.Length == 1)
+      {
+        <MudText Typo="Typo.body1" Color="Color.Secondary">@_cameras[0].Name</MudText>
+      }
+
+      @if (_isStreaming)
+      {
+        <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="StopWebcam">
+          Stop
+        </MudButton>
+      }
+      else
+      {
+        <MudButton Variant="Variant.Outlined" Color="Color.Success" OnClick="StartWebcam"
+                   StartIcon="@Icons.Material.Filled.Videocam"
+                   Disabled="_cameras.Length == 0 && _cameraListReceived">
+          Start
+        </MudButton>
+      }
     </div>
   </div>
 
   @if (_isStreaming)
   {
-    <div class="webcam-container">
+    <div class="webcam-container flex-grow-1">
       @if (!string.IsNullOrEmpty(_webcamImageDataUri))
       {
         <img src="@_webcamImageDataUri" alt="Webcam" class="webcam-image" />
@@ -40,36 +55,49 @@
       {
         <div class="webcam-loading">
           <MudProgressCircular Indeterminate Color="Color.Primary" Size="Size.Large" />
-          <MudText Typo="Typo.body2" Class="mt-2">Connecting to camera...</MudText>
+          <MudText Typo="Typo.body1" Class="mt-2" Color="Color.Info">Connecting to camera...</MudText>
         </div>
       }
     </div>
   }
-  else if (_cameras.Length == 0 && _cameraListRequested)
+  else if (_cameras.Length == 0 && _cameraListReceived)
   {
-    <MudAlert Severity="Severity.Info" Dense Class="mt-2">
-      No cameras detected on this device. FFmpeg may not be installed.
-    </MudAlert>
+    <div class="d-flex flex-column align-center justify-center flex-grow-1 gap-4">
+      <MudIcon Icon="@Icons.Material.Filled.VideocamOff" Size="Size.Large" Color="Color.Warning" />
+      <MudText Typo="Typo.h6" Color="Color.Warning">No cameras detected</MudText>
+      <MudText Typo="Typo.body1" Color="Color.Secondary" Align="Align.Center">
+        No cameras were found on this device. Ensure FFmpeg is installed on the agent.
+      </MudText>
+      <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="RequestCameraList">
+        Retry
+      </MudButton>
+    </div>
   }
-</MudPaper>
+  else if (!_cameraListReceived)
+  {
+    <div class="d-flex flex-column align-center justify-center flex-grow-1 gap-4">
+      <MudProgressCircular Indeterminate Color="Color.Info" Size="Size.Large" />
+      <MudText Typo="Typo.body1" Color="Color.Info">Detecting cameras...</MudText>
+    </div>
+  }
+</div>
 
 <style>
   .webcam-container {
     position: relative;
     width: 100%;
-    max-width: 640px;
     background: #000;
     border-radius: 4px;
     overflow: hidden;
-    min-height: 200px;
     display: flex;
     align-items: center;
     justify-content: center;
   }
 
   .webcam-image {
-    width: 100%;
-    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
     display: block;
   }
 
@@ -78,6 +106,6 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 40px;
+    padding: 60px;
   }
 </style>

@@ -18,6 +18,7 @@ public static class ClientRoutes
   public const string DeviceAccessRemoteLogs = $"{DeviceAccess}/remote-logs";
   public const string DeviceAccessTerminal = $"{DeviceAccess}/terminal";
   public const string DeviceAccessVncRelay = $"{DeviceAccess}/vnc-relay";
+  public const string DeviceAccessCamera = $"{DeviceAccess}/camera";
   public const string DeviceGroups = "/device-groups";
   public const string DeviceInventory = "/device-inventory";
   public const string Home = "/";
