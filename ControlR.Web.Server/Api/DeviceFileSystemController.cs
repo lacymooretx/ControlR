@@ -213,7 +213,6 @@ public class DeviceFileSystemController : ControllerBase
   }
 
   [HttpGet("download/{deviceId:guid}")]
-  [DisableRequestTimeout]
   public async Task<IActionResult> DownloadFile(
     [FromRoute] Guid deviceId,
     [FromQuery] string filePath,
@@ -389,7 +388,6 @@ public class DeviceFileSystemController : ControllerBase
   }
 
   [HttpGet("logs/{deviceId:guid}/contents")]
-  [DisableRequestTimeout]
   public async Task<IActionResult> GetLogFileContents(
     [FromRoute] Guid deviceId,
     [FromQuery] string filePath,
