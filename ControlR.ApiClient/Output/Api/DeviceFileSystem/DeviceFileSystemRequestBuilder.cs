@@ -5,6 +5,7 @@ using ControlR.ApiClient.Api.DeviceFileSystem.CreateDirectory;
 using ControlR.ApiClient.Api.DeviceFileSystem.Delete;
 using ControlR.ApiClient.Api.DeviceFileSystem.Download;
 using ControlR.ApiClient.Api.DeviceFileSystem.Logs;
+using ControlR.ApiClient.Api.DeviceFileSystem.MoveFile;
 using ControlR.ApiClient.Api.DeviceFileSystem.PathSegments;
 using ControlR.ApiClient.Api.DeviceFileSystem.RootDrives;
 using ControlR.ApiClient.Api.DeviceFileSystem.Subdirectories;
@@ -48,6 +49,11 @@ namespace ControlR.ApiClient.Api.DeviceFileSystem
         public global::ControlR.ApiClient.Api.DeviceFileSystem.Logs.LogsRequestBuilder Logs
         {
             get => new global::ControlR.ApiClient.Api.DeviceFileSystem.Logs.LogsRequestBuilder(PathParameters, RequestAdapter);
+        }
+        /// <summary>The moveFile property</summary>
+        public global::ControlR.ApiClient.Api.DeviceFileSystem.MoveFile.MoveFileRequestBuilder MoveFile
+        {
+            get => new global::ControlR.ApiClient.Api.DeviceFileSystem.MoveFile.MoveFileRequestBuilder(PathParameters, RequestAdapter);
         }
         /// <summary>The pathSegments property</summary>
         public global::ControlR.ApiClient.Api.DeviceFileSystem.PathSegments.PathSegmentsRequestBuilder PathSegments

@@ -47,11 +47,17 @@
             </MudButton>
           </MudTooltip>
         </div>
-        <div class="my-2">
+        <div class="d-flex align-center gap-4 my-2">
           <MudTooltip Text="Start with view-only mode enabled">
             <MudSwitch @bind-Value="RemoteControlState.IsViewOnlyEnabled" Color="Color.Success" Label="Start View Only"
               ThumbIcon="@(Icons.Material.Filled.RemoveRedEye)" />
           </MudTooltip>
+
+          <MudButton StartIcon="@Icons.Material.Filled.Videocam" Color="Color.Info" Variant="Variant.Outlined"
+            OnClick="HandleViewCameraClicked"
+            Disabled="@(_systemSessions is null || _systemSessions.Length == 0)">
+            View Camera
+          </MudButton>
         </div>
 
         @if (_systemSessions is null || _systemSessions.Length == 0)

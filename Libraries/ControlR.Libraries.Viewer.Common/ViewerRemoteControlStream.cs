@@ -32,6 +32,7 @@ public interface IViewerRemoteControlStream : IManagedRelayStream
   Task SendGetPrinters(CancellationToken cancellationToken);
   Task SendPrintJob(string printerName, string fileName, byte[] fileData, int copies, CancellationToken cancellationToken);
   Task SendAudioControl(bool isEnabled, int sampleRate, int channels, CancellationToken cancellationToken);
+  Task SendWebcamControl(bool isEnabled, int preferredWidth, int preferredHeight, int cameraIndex, CancellationToken cancellationToken);
 }
 
 public class ViewerRemoteControlStream(
@@ -279,6 +280,17 @@ public class ViewerRemoteControlStream(
       {
         var dto = new AudioControlDto(isEnabled, sampleRate, channels);
         var wrapper = DtoWrapper.Create(dto, DtoType.AudioControl);
+        await Send(wrapper, cancellationToken);
+      });
+  }
+
+  public async Task SendWebcamControl(bool isEnabled, int preferredWidth, int preferredHeight, int cameraIndex, CancellationToken cancellationToken)
+  {
+    await TrySend(
+      async () =>
+      {
+        var dto = new WebcamControlDto(isEnabled, preferredWidth, preferredHeight, cameraIndex);
+        var wrapper = DtoWrapper.Create(dto, DtoType.WebcamControl);
         await Send(wrapper, cancellationToken);
       });
   }

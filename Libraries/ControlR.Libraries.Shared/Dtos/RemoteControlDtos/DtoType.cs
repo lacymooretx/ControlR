@@ -46,4 +46,8 @@ public enum DtoType
   // Audio Forwarding
   AudioControl = 70,
   AudioPacket = 71,
+
+  // Webcam
+  WebcamControl = 80,
+  WebcamFrame = 81,
 }

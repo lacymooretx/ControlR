@@ -1,8 +1,8 @@
 {
-  "descriptionHash": "D89018DB47671C4B52281C4E597FFF6D2757EEA943AEBCDA5962346E84C0B5192928C8B4B951DF5E699BF1738EACA8B0366EA34826D38B0C8542528473D53D69",
+  "descriptionHash": "13BE9489A7CD151DF2BCEE7EBDED8F79817757697EEB90F3244F5BFABC933D62761865F6DD391F9AA74DB6AB6AACB8323214344F8CED2E25487C396E6182C041",
   "descriptionLocation": "../../ControlR.Web.Server/ControlR.Web.Server.json",
   "lockFileVersion": "1.0.0",
-  "kiotaVersion": "1.29.0",
+  "kiotaVersion": "1.30.0",
   "clientClassName": "ControlrApiClient",
   "typeAccessModifier": "Public",
   "clientNamespaceName": "ControlR.ApiClient",

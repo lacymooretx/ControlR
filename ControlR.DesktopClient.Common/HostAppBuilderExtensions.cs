@@ -41,6 +41,7 @@ public static class HostAppBuilderExtensions
       .AddSingleton<IMemoryProvider, MemoryProvider>()
       .AddSingleton<ISystemEnvironment, SystemEnvironment>()
       .AddSingleton<IDesktopRemoteControlStream, DesktopRemoteControlStream>()
+      .AddSingleton<IWebcamCapturer, WebcamCapturer>()
       .AddSingleton<IDesktopCapturerFactory, DesktopCapturerFactory>()
       .AddSingleton<IDesktopPreviewProvider, DesktopPreviewProvider>()
       .AddSingleton<ISessionConsentService, SessionConsentService>()

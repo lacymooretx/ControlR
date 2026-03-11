@@ -1,5 +1,85 @@
 # ControlR Deployment Runlog
 
+## 2026-03-11: Webcam Viewing Feature (Phase 1 — Viewer Infrastructure)
+
+### What was done
+Added webcam viewing capability to the Remote Control interface. This is Phase 1 (viewer-side infrastructure + agent stubs). Agent-side webcam capture requires platform-specific implementation (Phase 2).
+
+### Files created
+- `Libraries/ControlR.Libraries.Shared/Dtos/RemoteControlDtos/WebcamControlDto.cs` — Control DTO (start/stop, resolution, camera index)
+- `Libraries/ControlR.Libraries.Shared/Dtos/RemoteControlDtos/WebcamFrameDto.cs` — Frame DTO (JPEG data, dimensions, timestamp)
+
+### Files modified
+- `Libraries/ControlR.Libraries.Shared/Dtos/RemoteControlDtos/DtoType.cs` — Added `WebcamControl = 80`, `WebcamFrame = 81`
+- `Libraries/ControlR.Libraries.Viewer.Common/ViewerRemoteControlStream.cs` — Added `SendWebcamControl` method
+- `Libraries/ControlR.Libraries.Viewer.Common/State/RemoteControlState.cs` — Added `IsWebcamRequested` state property
+- `ControlR.DesktopClient.Common/Services/DesktopRemoteControlStream.cs` — Handle `WebcamControl` (stub, sends toast notification)
+- `ControlR.Web.Client/Components/Pages/DeviceAccess/RemoteControl.razor` — Added "View Camera" button on session selection screen
+- `ControlR.Web.Client/Components/Pages/DeviceAccess/RemoteControl.razor.cs` — Added `HandleViewCameraClicked` method
+- `ControlR.Web.Client/Components/RemoteDisplays/RemoteDisplay.razor` — Added webcam toggle in action bar + PIP overlay
+- `ControlR.Web.Client/Components/RemoteDisplays/RemoteDisplay.razor.cs` — Webcam toggle handler, WebcamFrame handler, auto-enable on connect
+- `ControlR.Web.Client/Components/RemoteDisplays/RemoteDisplay.razor.css` — Webcam PIP styling
+
+### Build result
+Build succeeded with 0 errors.
+
+### Phase 2: Agent-Side Webcam Capture (Completed)
+
+**Approach**: Cross-platform FFmpeg process-based capture (no new NuGet dependencies)
+
+**Files created:**
+- `ControlR.DesktopClient.Common/ServiceInterfaces/IWebcamCapturer.cs` — Interface for webcam capture
+- `ControlR.DesktopClient.Common/Services/WebcamCapturer.cs` — FFmpeg-based implementation
+
+**Files modified:**
+- `ControlR.DesktopClient.Common/HostAppBuilderExtensions.cs` — Registered `IWebcamCapturer` in DI
+- `ControlR.DesktopClient.Common/Services/DesktopRemoteControlStream.cs` — Full webcam control handling:
+  - Injected `IWebcamCapturer` dependency
+  - `WebcamControl` handler starts/stops webcam streaming
+  - `StreamWebcamToViewer()` method captures and sends JPEG frames
+  - Proper cleanup in `DisposeAsync()`
+
+**Platform support via FFmpeg:**
+- **Windows**: DirectShow (`-f dshow`) with automatic device enumeration
+- **macOS**: AVFoundation (`-f avfoundation`) with numeric device index
+- **Linux**: V4L2 (`-f v4l2`) with `/dev/videoN` device paths
+
+**Capture pipeline:**
+1. FFmpeg captures webcam at 10fps, outputs MJPEG to stdout
+2. `ParseMjpegStream()` reads JPEG frame boundaries (SOI/EOI markers)
+3. Each frame wrapped in `WebcamFrameDto` and sent via WebSocket relay
+4. Viewer displays as PIP overlay (base64 data URI)
+
+**Build**: Succeeded with 0 errors
+**Tests**: All passing (pre-existing Docker test failure unrelated)
+
+### Phase 3: UX Polish (Completed)
+
+**Webcam PIP overlay improvements:**
+- Added drag handle header bar (grab cursor, dark overlay)
+- Added close button (X) to dismiss webcam without using the action bar toggle
+- Added resize toggle (small 240px / large 480px) with smooth CSS transition
+- Added "Connecting camera..." placeholder with spinner while waiting for first frame
+- PIP is draggable via pointer events + CSS transform (with stopPropagation to not interfere with remote control)
+- Added `moveWebcamPip` JS export to RemoteDisplay.razor.js
+
+**Files modified:**
+- `ControlR.Web.Client/Components/RemoteDisplays/RemoteDisplay.razor` — PIP with header bar, buttons, drag events
+- `ControlR.Web.Client/Components/RemoteDisplays/RemoteDisplay.razor.cs` — PIP state fields, drag handlers, close/resize methods
+- `ControlR.Web.Client/Components/RemoteDisplays/RemoteDisplay.razor.css` — Complete PIP styling (header, sizes, placeholder, buttons)
+- `ControlR.Web.Client/Components/RemoteDisplays/RemoteDisplay.razor.js` — moveWebcamPip() function
+
+**Build**: Succeeded with 0 errors
+**Tests**: All passing
+
+### Remaining (Future)
+- Native webcam capture (bypass FFmpeg requirement)
+- Camera device selection UI
+- Resolution/FPS/quality preferences
+- Webcam availability indicator on device cards
+
+---
+
 ## 2026-03-08: Automated Agent Deployment (Server-Pull Model)
 
 ### What was done

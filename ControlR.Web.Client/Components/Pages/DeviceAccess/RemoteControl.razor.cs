@@ -211,6 +211,19 @@ public partial class RemoteControl : ViewportAwareComponent
     Snackbar.Add("Sessions refreshed", Severity.Info);
   }
 
+  private async Task HandleViewCameraClicked()
+  {
+    if (_systemSessions is null || _systemSessions.Length == 0)
+    {
+      Snackbar.Add("No desktop sessions available", Severity.Warning);
+      return;
+    }
+
+    RemoteControlState.IsWebcamRequested = true;
+    RemoteControlState.IsViewOnlyEnabled = true;
+    await StartRemoteControl(_systemSessions[0], quiet: false);
+  }
+
   private async Task HandleReloadClicked()
   {
     _alertMessage = null;

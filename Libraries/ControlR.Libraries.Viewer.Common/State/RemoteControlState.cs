@@ -17,6 +17,7 @@ public interface IRemoteControlState : IStateBase
   bool IsScrollModeToggled { get; set; }
   bool IsViewOnlyEnabled { get; set; }
   bool IsVirtualKeyboardToggled { get; set; }
+  bool IsWebcamRequested { get; set; }
   double MaxCanvasScale { get; }
   double MinCanvasScale { get; }
   DisplayDto? SelectedDisplay { get; set; }
@@ -78,6 +79,11 @@ public class RemoteControlState(ILogger<ObservableState> logger) : ObservableSta
     set => Set(value);
   }
   public bool IsVirtualKeyboardToggled
+  {
+    get => Get<bool>();
+    set => Set(value);
+  }
+  public bool IsWebcamRequested
   {
     get => Get<bool>();
     set => Set(value);

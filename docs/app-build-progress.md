@@ -756,7 +756,13 @@ All 20 features from the ScreenConnect/TeamViewer/LogMeIn/Splashtop/AnyDesk gap 
 - Removed Azure OIDC login dependency (no longer needed)
 - Created `docs/code-signing-secrets.md` with all required GitHub secrets
 
-### Phase 3: Deploy & Verify — Pending
-- [ ] Add GitHub secrets to `lacymooretx/controlr` repo (copy from RustDesk repo)
-- [ ] Run build workflow to verify signing works
-- [ ] Deploy updated server image to production
+### Phase 3: Deploy & Verify — Complete
+- [x] All 9 GitHub secrets set:
+  - SM_API_KEY, SM_CLIENT_CERT_FILE_BASE64, SM_CLIENT_CERT_PASSWORD (Windows DigiCert)
+  - MACOS_P12_BASE64, MACOS_P12_PASSWORD (Apple Developer ID cert — copied from RustDesk repo via one-shot workflow)
+  - MACOS_CODESIGN_IDENTITY, MACOS_NOTARIZE_KEY_BASE64, MACOS_NOTARIZE_KEY_ID, MACOS_NOTARIZE_ISSUER_ID
+- [x] `secure-signing` GitHub environment created
+- [x] `CURRENT_VERSION` variable set to `1.0.0.0`
+- [x] Server image rebuilt and deployed (`controlr-aspendora:latest`)
+- [x] Container healthy, branding assets verified on https://control.aspendora.com
+- [ ] Run full CI build workflow to verify Windows + macOS signing end-to-end

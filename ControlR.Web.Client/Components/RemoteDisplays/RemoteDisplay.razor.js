@@ -831,3 +831,15 @@ function stopPanInertia(state) {
     state.panAnimationFrameId = -1;
   }
 }
+
+/**
+ * Move the webcam PIP overlay using CSS transform.
+ * @param {HTMLElement} pipElement
+ * @param {number} offsetX
+ * @param {number} offsetY
+ */
+export function moveWebcamPip(pipElement, offsetX, offsetY) {
+  if (pipElement) {
+    pipElement.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+  }
+}

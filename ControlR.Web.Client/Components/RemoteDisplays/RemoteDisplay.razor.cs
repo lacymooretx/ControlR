@@ -16,6 +16,15 @@ public partial class RemoteDisplay : JsInteropableComponent
   private ControlMode _controlMode = ControlMode.Mouse;
   private bool _isAnnotationMode;
   private bool _isAudioEnabled;
+  private bool _isWebcamEnabled;
+  private string? _webcamImageDataUri;
+  private string _webcamPipSize = "pip-small";
+  private ElementReference _webcamPipRef;
+  private bool _isDraggingPip;
+  private double _pipDragStartX;
+  private double _pipDragStartY;
+  private double _pipOffsetX;
+  private double _pipOffsetY;
   private double _lastPinchDistance = -1;
   private double _lastTouch0X = -1;
   private double _lastTouch0Y = -1;
@@ -264,6 +273,16 @@ public partial class RemoteDisplay : JsInteropableComponent
     {
       await _virtualKeyboard.FocusAsync();
     }
+
+    if (RemoteControlState.IsWebcamRequested)
+    {
+      RemoteControlState.IsWebcamRequested = false;
+      _isWebcamEnabled = true;
+      if (RemoteControlStream.IsConnected)
+      {
+        await RemoteControlStream.SendWebcamControl(true, 640, 480, 0, ComponentClosing);
+      }
+    }
   }
 
   private async Task DrawRegion(ScreenRegionDto dto)
@@ -394,6 +413,51 @@ public partial class RemoteDisplay : JsInteropableComponent
     }
   }
 
+  private async Task HandleWebcamToggled(bool isEnabled)
+  {
+    _isWebcamEnabled = isEnabled;
+    if (!isEnabled)
+    {
+      _webcamImageDataUri = null;
+    }
+    if (RemoteControlStream.IsConnected)
+    {
+      await RemoteControlStream.SendWebcamControl(isEnabled, 640, 480, 0, ComponentClosing);
+    }
+  }
+
+  private async Task HandleWebcamPipClose()
+  {
+    await HandleWebcamToggled(false);
+  }
+
+  private void HandleWebcamPipResize()
+  {
+    _webcamPipSize = _webcamPipSize == "pip-small" ? "pip-large" : "pip-small";
+  }
+
+  private void HandleWebcamPipPointerDown(PointerEventArgs e)
+  {
+    _isDraggingPip = true;
+    _pipDragStartX = e.ClientX - _pipOffsetX;
+    _pipDragStartY = e.ClientY - _pipOffsetY;
+  }
+
+  private async Task HandleWebcamPipPointerMove(PointerEventArgs e)
+  {
+    if (!_isDraggingPip) return;
+
+    _pipOffsetX = e.ClientX - _pipDragStartX;
+    _pipOffsetY = e.ClientY - _pipDragStartY;
+
+    await JsModule.InvokeVoidAsync("moveWebcamPip", _webcamPipRef, _pipOffsetX, _pipOffsetY);
+  }
+
+  private void HandleWebcamPipPointerUp(PointerEventArgs e)
+  {
+    _isDraggingPip = false;
+  }
+
   private async Task HandleDisconnectClicked()
   {
     await OnDisconnectRequested.InvokeAsync();
@@ -415,6 +479,11 @@ public partial class RemoteDisplay : JsInteropableComponent
       ?? RemoteControlState.DisplayData[0];
 
     RemoteControlState.SelectedDisplay = selectedDisplay;
+
+    if (_isWebcamEnabled && RemoteControlStream.IsConnected)
+    {
+      await RemoteControlStream.SendWebcamControl(true, 640, 480, 0, ComponentClosing);
+    }
 
     await InvokeAsync(StateHasChanged);
   }
@@ -520,6 +589,17 @@ public partial class RemoteDisplay : JsInteropableComponent
           {
             // TODO: Implement audio playback via Web Audio API.
             // Audio packets are received but playback is not yet implemented.
+            break;
+          }
+        case DtoType.WebcamFrame:
+          {
+            if (_isWebcamEnabled)
+            {
+              var dto = wrapper.GetPayload<WebcamFrameDto>();
+              var base64 = Convert.ToBase64String(dto.JpegData);
+              _webcamImageDataUri = $"data:image/jpeg;base64,{base64}";
+              await InvokeAsync(StateHasChanged);
+            }
             break;
           }
         case DtoType.PrivacyScreenResult:

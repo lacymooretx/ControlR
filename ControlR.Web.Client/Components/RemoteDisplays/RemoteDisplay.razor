@@ -34,6 +34,12 @@
           Toggled="_isAudioEnabled" ToggledChanged="HandleAudioToggled" />
       </MudTooltip>
 
+      <MudTooltip Text="Toggle Webcam" Placement="Placement.Right" Class="z9002">
+        <MudToggleIconButton Variant="Variant.Outlined" Icon="@(Icons.Material.Filled.VideocamOff)" Size="Size.Small"
+          ToggledColor="Color.Success" ToggledIcon="@(Icons.Material.Filled.Videocam)"
+          Toggled="_isWebcamEnabled" ToggledChanged="HandleWebcamToggled" />
+      </MudTooltip>
+
       @if (_controlMode == ControlMode.Touch)
       {
         <MudDivider Vertical FlexItem />
@@ -87,6 +93,35 @@
                         CanvasWidth="CanvasWidth"
                         CanvasHeight="CanvasHeight"
                         CanvasStyle="@(AnnotationCanvasStyle)" />
+
+      @if (_isWebcamEnabled)
+      {
+        <div class="webcam-pip @(_webcamPipSize)" @ref="_webcamPipRef">
+          <div class="webcam-pip-header"
+               @onpointerdown="HandleWebcamPipPointerDown"
+               @onpointerdown:stopPropagation
+               @onpointermove="HandleWebcamPipPointerMove"
+               @onpointermove:stopPropagation
+               @onpointerup="HandleWebcamPipPointerUp"
+               @onpointerup:stopPropagation>
+            <MudIconButton Icon="@(_webcamPipSize == "pip-large" ? Icons.Material.Filled.CloseFullscreen : Icons.Material.Filled.OpenInFull)"
+              Size="Size.Small" Class="webcam-pip-btn" OnClick="HandleWebcamPipResize" />
+            <MudIconButton Icon="@Icons.Material.Filled.Close"
+              Size="Size.Small" Class="webcam-pip-btn" Color="Color.Error" OnClick="HandleWebcamPipClose" />
+          </div>
+          @if (!string.IsNullOrEmpty(_webcamImageDataUri))
+          {
+            <img src="@_webcamImageDataUri" alt="Webcam" class="webcam-pip-image" />
+          }
+          else
+          {
+            <div class="webcam-pip-placeholder">
+              <MudProgressCircular Indeterminate Size="Size.Small" Color="Color.Info" />
+              <MudText Typo="Typo.caption" Class="mt-1">Connecting camera...</MudText>
+            </div>
+          }
+        </div>
+      }
     </div>
   </div>
 

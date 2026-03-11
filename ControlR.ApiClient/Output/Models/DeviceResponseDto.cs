@@ -148,6 +148,14 @@ namespace ControlR.ApiClient.Models
 #endif
         /// <summary>The tenantId property</summary>
         public Guid? TenantId { get; set; }
+        /// <summary>The tenantName property</summary>
+#if NETSTANDARD2_1_OR_GREATER || NETCOREAPP3_1_OR_GREATER
+#nullable enable
+        public string? TenantName { get; set; }
+#nullable restore
+#else
+        public string TenantName { get; set; }
+#endif
         /// <summary>The totalMemory property</summary>
         public double? TotalMemory { get; set; }
         /// <summary>The totalStorage property</summary>
@@ -206,6 +214,7 @@ namespace ControlR.ApiClient.Models
                 { "publicIpV6", n => { PublicIpV6 = n.GetStringValue(); } },
                 { "tagIds", n => { TagIds = n.GetCollectionOfPrimitiveValues<Guid?>()?.AsList(); } },
                 { "tenantId", n => { TenantId = n.GetGuidValue(); } },
+                { "tenantName", n => { TenantName = n.GetStringValue(); } },
                 { "totalMemory", n => { TotalMemory = n.GetDoubleValue(); } },
                 { "totalStorage", n => { TotalStorage = n.GetDoubleValue(); } },
                 { "usedMemory", n => { UsedMemory = n.GetDoubleValue(); } },
@@ -244,6 +253,7 @@ namespace ControlR.ApiClient.Models
             writer.WriteStringValue("publicIpV6", PublicIpV6);
             writer.WriteCollectionOfPrimitiveValues<Guid?>("tagIds", TagIds);
             writer.WriteGuidValue("tenantId", TenantId);
+            writer.WriteStringValue("tenantName", TenantName);
             writer.WriteDoubleValue("totalMemory", TotalMemory);
             writer.WriteDoubleValue("totalStorage", TotalStorage);
             writer.WriteDoubleValue("usedMemory", UsedMemory);

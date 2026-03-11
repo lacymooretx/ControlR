@@ -62,3 +62,66 @@
     top: -10000px;
     z-index: -1;
 }
+
+.webcam-pip {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    background: #000;
+    transition: width 0.2s ease;
+}
+
+.webcam-pip.pip-small {
+    width: 240px;
+}
+
+.webcam-pip.pip-large {
+    width: 480px;
+}
+
+.webcam-pip-header {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 2px 4px;
+    cursor: grab;
+    gap: 2px;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.webcam-pip-header:active {
+    cursor: grabbing;
+}
+
+::deep .webcam-pip-btn {
+    color: rgba(255, 255, 255, 0.8) !important;
+    padding: 2px !important;
+    min-width: 24px !important;
+    min-height: 24px !important;
+}
+
+::deep .webcam-pip-btn:hover {
+    color: #fff !important;
+}
+
+.webcam-pip-image {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.webcam-pip-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+    color: rgba(255, 255, 255, 0.7);
+}

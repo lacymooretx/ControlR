@@ -38,6 +38,7 @@ internal sealed class DesktopRemoteControlStream(
   IMemoryProvider memoryProvider,
   IInputSimulator inputSimulator,
   IDisplayManager displayManager,
+  IWebcamCapturer webcamCapturer,
   IWaiter waiter,
   ISystemEnvironment systemEnvironment,
   IOptions<RemoteControlSessionOptions> startupOptions,
@@ -56,12 +57,16 @@ internal sealed class DesktopRemoteControlStream(
   private readonly IOptions<RemoteControlSessionOptions> _startupOptions = startupOptions;
   private readonly ISystemEnvironment _systemEnvironment = systemEnvironment;
   private readonly IToaster _toaster = toaster;
+  private readonly IWebcamCapturer _webcamCapturer = webcamCapturer;
 
   private bool _isInputBlocked;
+  private CancellationTokenSource? _webcamCts;
   private IDisposable? _messageHandlerRegistration;
 
   public async ValueTask DisposeAsync()
   {
+    _webcamCts?.Cancel();
+    _webcamCts?.Dispose();
     await Close();
     _messageHandlerRegistration?.Dispose();
     await _desktopCapturer.DisposeAsync();
@@ -409,6 +414,36 @@ internal sealed class DesktopRemoteControlStream(
               payload.IsEnabled, payload.SampleRate, payload.Channels);
             break;
           }
+        case DtoType.WebcamControl:
+          {
+            var payload = wrapper.GetPayload<WebcamControlDto>();
+            _logger.LogInformation(
+              "Received WebcamControl request. Enabled: {IsEnabled}, Resolution: {Width}x{Height}, Camera: {CameraIndex}.",
+              payload.IsEnabled, payload.PreferredWidth, payload.PreferredHeight, payload.CameraIndex);
+
+            if (payload.IsEnabled)
+            {
+              if (!_webcamCapturer.IsAvailable())
+              {
+                var toastDto = new ToastNotificationDto(
+                  "Webcam capture requires FFmpeg to be installed on the remote machine.",
+                  Libraries.Shared.Enums.MessageSeverity.Warning);
+                var toastWrapper = DtoWrapper.Create(toastDto, DtoType.ToastNotification);
+                await Send(toastWrapper, _appLifetime.ApplicationStopping);
+                break;
+              }
+
+              _webcamCts?.Cancel();
+              _webcamCts = CancellationTokenSource.CreateLinkedTokenSource(_appLifetime.ApplicationStopping);
+              _ = StreamWebcamToViewer(payload, _webcamCts.Token);
+            }
+            else
+            {
+              _webcamCts?.Cancel();
+              _webcamCts = null;
+            }
+            break;
+          }
         default:
           _logger.LogWarning("Unhandled DTO type: {type}", wrapper.DtoType);
           break;
@@ -526,6 +561,53 @@ internal sealed class DesktopRemoteControlStream(
       state: null,
       dueTime: TimeSpan.FromSeconds(1),
       period: _metricsWindow);
+  }
+
+  private async Task StreamWebcamToViewer(WebcamControlDto control, CancellationToken cancellationToken)
+  {
+    try
+    {
+      _logger.LogInformation("Starting webcam stream. Camera: {CameraIndex}", control.CameraIndex);
+
+      await foreach (var jpegData in _webcamCapturer.CaptureFrames(
+        control.PreferredWidth, control.PreferredHeight, control.CameraIndex, cancellationToken))
+      {
+        if (State != System.Net.WebSockets.WebSocketState.Open)
+        {
+          break;
+        }
+
+        var dto = new WebcamFrameDto(jpegData, control.PreferredWidth, control.PreferredHeight,
+          TimeProvider.System.GetTimestamp());
+        var frameWrapper = DtoWrapper.Create(dto, DtoType.WebcamFrame);
+        await Send(frameWrapper, cancellationToken);
+      }
+    }
+    catch (OperationCanceledException)
+    {
+      _logger.LogInformation("Webcam stream cancelled.");
+    }
+    catch (Exception ex)
+    {
+      _logger.LogError(ex, "Error while streaming webcam.");
+
+      try
+      {
+        var toastDto = new ToastNotificationDto(
+          $"Webcam error: {ex.Message}",
+          Libraries.Shared.Enums.MessageSeverity.Error);
+        var toastWrapper = DtoWrapper.Create(toastDto, DtoType.ToastNotification);
+        await Send(toastWrapper, _appLifetime.ApplicationStopping);
+      }
+      catch
+      {
+        // Best effort.
+      }
+    }
+    finally
+    {
+      _logger.LogInformation("Webcam stream ended.");
+    }
   }
 
   private async Task StreamScreenToViewer(CancellationToken cancellationToken)

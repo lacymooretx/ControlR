@@ -16,6 +16,8 @@ namespace ControlR.ApiClient.Models
         public IDictionary<string, object> AdditionalData { get; set; }
         /// <summary>The createdAt property</summary>
         public DateTimeOffset? CreatedAt { get; set; }
+        /// <summary>The expiresAt property</summary>
+        public DateTimeOffset? ExpiresAt { get; set; }
         /// <summary>The id property</summary>
         public Guid? Id { get; set; }
         /// <summary>The lastUsed property</summary>
@@ -28,6 +30,8 @@ namespace ControlR.ApiClient.Models
 #else
         public string Name { get; set; }
 #endif
+        /// <summary>The revokedAt property</summary>
+        public DateTimeOffset? RevokedAt { get; set; }
         /// <summary>
         /// Instantiates a new <see cref="global::ControlR.ApiClient.Models.PersonalAccessTokenDto"/> and sets the default values.
         /// </summary>
@@ -54,9 +58,11 @@ namespace ControlR.ApiClient.Models
             return new Dictionary<string, Action<IParseNode>>
             {
                 { "createdAt", n => { CreatedAt = n.GetDateTimeOffsetValue(); } },
+                { "expiresAt", n => { ExpiresAt = n.GetDateTimeOffsetValue(); } },
                 { "id", n => { Id = n.GetGuidValue(); } },
                 { "lastUsed", n => { LastUsed = n.GetDateTimeOffsetValue(); } },
                 { "name", n => { Name = n.GetStringValue(); } },
+                { "revokedAt", n => { RevokedAt = n.GetDateTimeOffsetValue(); } },
             };
         }
         /// <summary>
@@ -67,9 +73,11 @@ namespace ControlR.ApiClient.Models
         {
             if(ReferenceEquals(writer, null)) throw new ArgumentNullException(nameof(writer));
             writer.WriteDateTimeOffsetValue("createdAt", CreatedAt);
+            writer.WriteDateTimeOffsetValue("expiresAt", ExpiresAt);
             writer.WriteGuidValue("id", Id);
             writer.WriteDateTimeOffsetValue("lastUsed", LastUsed);
             writer.WriteStringValue("name", Name);
+            writer.WriteDateTimeOffsetValue("revokedAt", RevokedAt);
             writer.WriteAdditionalData(AdditionalData);
         }
     }
