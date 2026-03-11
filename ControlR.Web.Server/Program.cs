@@ -92,6 +92,7 @@ app.UseWhen(
   });
 
 app.MapAdditionalIdentityEndpoints();
+app.MapManagementEndpoints();
 
 app.MapHub<ViewerHub>(AppConstants.ViewerHubPath);
 
