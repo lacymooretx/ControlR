@@ -52,18 +52,20 @@ else
   app.UseHsts();
 }
 
-// Serve agent download binaries from physical disk before MapStaticAssets.
-// MapStaticAssets uses a build-time manifest with stale file sizes; the
-// downloads volume is updated at runtime by pull-agents.sh.
+// Serve agent download binaries from physical disk in an isolated branch.
+// app.Map creates a separate pipeline that short-circuits completely,
+// preventing MapStaticAssets from serving stale manifest entries.
 var downloadsPath = Path.Combine(builder.Environment.WebRootPath, "downloads");
 if (Directory.Exists(downloadsPath))
 {
-  app.UseStaticFiles(new StaticFileOptions
+  app.Map("/downloads", downloadApp =>
   {
-    RequestPath = "/downloads",
-    FileProvider = new PhysicalFileProvider(downloadsPath),
-    ServeUnknownFileTypes = true,
-    DefaultContentType = "application/octet-stream"
+    downloadApp.UseStaticFiles(new StaticFileOptions
+    {
+      FileProvider = new PhysicalFileProvider(downloadsPath),
+      ServeUnknownFileTypes = true,
+      DefaultContentType = "application/octet-stream"
+    });
   });
 }
 
