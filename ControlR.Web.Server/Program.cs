@@ -52,20 +52,28 @@ else
   app.UseHsts();
 }
 
-// Serve agent download binaries from physical disk in an isolated branch.
-// app.Map creates a separate pipeline that short-circuits completely,
-// preventing MapStaticAssets from serving stale manifest entries.
+// Serve agent download binaries directly from disk.
+// Must intercept before MapStaticAssets, which uses a build-time manifest
+// with stale file sizes that cause errors when binaries are updated at runtime.
 var downloadsPath = Path.Combine(builder.Environment.WebRootPath, "downloads");
 if (Directory.Exists(downloadsPath))
 {
-  app.Map("/downloads", downloadApp =>
+  var downloadsProvider = new PhysicalFileProvider(downloadsPath);
+  app.Use(async (context, next) =>
   {
-    downloadApp.UseStaticFiles(new StaticFileOptions
+    if (context.Request.Path.StartsWithSegments("/downloads", out var remaining) &&
+        context.Request.Method == "GET")
     {
-      FileProvider = new PhysicalFileProvider(downloadsPath),
-      ServeUnknownFileTypes = true,
-      DefaultContentType = "application/octet-stream"
-    });
+      var fileInfo = downloadsProvider.GetFileInfo(remaining.Value ?? "");
+      if (fileInfo.Exists && !fileInfo.IsDirectory && fileInfo.PhysicalPath is not null)
+      {
+        context.Response.ContentType = "application/octet-stream";
+        context.Response.ContentLength = fileInfo.Length;
+        await context.Response.SendFileAsync(fileInfo.PhysicalPath);
+        return;
+      }
+    }
+    await next();
   });
 }
 
