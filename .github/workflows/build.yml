@@ -96,7 +96,7 @@ jobs:
 
       - name: Run Tests
         run: |
-          dotnet test ControlR.sln -c Release
+          dotnet test controlr.sln -c Release
 
   build-nuget-packages:
     name: Build NuGet Packages
