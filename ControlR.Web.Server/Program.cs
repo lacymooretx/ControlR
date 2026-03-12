@@ -54,6 +54,19 @@ else
 
 app.MapStaticAssets();
 
+// Serve agent download binaries (Linux/macOS agents have no file extension).
+var downloadsPath = Path.Combine(builder.Environment.WebRootPath, "downloads");
+if (Directory.Exists(downloadsPath))
+{
+  app.UseStaticFiles(new StaticFileOptions
+  {
+    RequestPath = "/downloads",
+    FileProvider = new PhysicalFileProvider(downloadsPath),
+    ServeUnknownFileTypes = true,
+    DefaultContentType = "application/octet-stream"
+  });
+}
+
 var novncContentTypeProvider = new FileExtensionContentTypeProvider();
 novncContentTypeProvider.Mappings[".cur"] = "image/x-icon";
 novncContentTypeProvider.Mappings[".wasm"] = "application/wasm";
