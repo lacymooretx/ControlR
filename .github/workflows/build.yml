@@ -388,7 +388,7 @@ jobs:
         shell: bash
         run: |
           shopt -s nullglob
-          for f in ./ControlR.DesktopClient/bin/publish/${{ matrix.arch }}/*.exe ./ControlR.DesktopClient/bin/publish/${{ matrix.arch }}/*.dll; do
+          for f in ./ControlR.DesktopClient/bin/publish/${{ matrix.arch }}/ControlR.*.exe ./ControlR.DesktopClient/bin/publish/${{ matrix.arch }}/ControlR.*.dll; do
             smctl sign --keypair-alias $DIGICERT_KEYPAIR_ALIAS --input "$f" && echo "Signed: $f"
           done
         env:
@@ -421,7 +421,7 @@ jobs:
         shell: bash
         run: |
           shopt -s nullglob
-          for f in ./ControlR.Web.Server/wwwroot/downloads/${{ matrix.arch }}/*.exe ./ControlR.Web.Server/wwwroot/downloads/${{ matrix.arch }}/*.dll; do
+          for f in ./ControlR.Web.Server/wwwroot/downloads/${{ matrix.arch }}/ControlR.*.exe ./ControlR.Web.Server/wwwroot/downloads/${{ matrix.arch }}/ControlR.*.dll; do
             smctl sign --keypair-alias $DIGICERT_KEYPAIR_ALIAS --input "$f" && echo "Signed: $f"
           done
         env:
