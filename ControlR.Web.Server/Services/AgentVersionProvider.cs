@@ -1,5 +1,3 @@
-using Microsoft.Extensions.FileProviders;
-
 namespace ControlR.Web.Server.Services;
 
 public interface IAgentVersionProvider
@@ -11,40 +9,34 @@ public class AgentVersionProvider(
   IWebHostEnvironment webHostEnvironment,
   ILogger<AgentVersionProvider> logger) : IAgentVersionProvider
 {
-  private volatile static Version? _cachedVersion;
-
   public async Task<Result<Version>> TryGetAgentVersion()
   {
     try
     {
       if (!webHostEnvironment.IsProduction())
       {
-        _cachedVersion = typeof(AgentVersionProvider).Assembly.GetName()?.Version;
-      }
-      
-      if (_cachedVersion is not null)
-      {
-        return Result.Ok(_cachedVersion);
+        var assemblyVersion = typeof(AgentVersionProvider).Assembly.GetName()?.Version;
+        return assemblyVersion is not null
+          ? Result.Ok(assemblyVersion)
+          : Result.Fail<Version>("Assembly version not available.");
       }
 
-      var fileInfo = webHostEnvironment.WebRootFileProvider.GetFileInfo("/downloads/Version.txt");
+      var physicalPath = Path.Combine(webHostEnvironment.WebRootPath, "downloads", "Version.txt");
 
-      if (!fileInfo.Exists || string.IsNullOrWhiteSpace(fileInfo.PhysicalPath))
+      if (!File.Exists(physicalPath))
       {
-        logger.LogError("Agent version file not found at path: {Path}", fileInfo.PhysicalPath);
+        logger.LogError("Agent version file not found at path: {Path}", physicalPath);
         return Result.Fail<Version>("Version file not found.");
       }
 
-      await using var fs = fileInfo.CreateReadStream();
-      using var sr = new StreamReader(fs);
-      var versionString = await sr.ReadToEndAsync();
+      var versionString = await File.ReadAllTextAsync(physicalPath);
 
       if (!Version.TryParse(versionString?.Trim(), out var version))
       {
         logger.LogError("Invalid version format in file: {VersionString}", versionString);
         return Result.Fail<Version>("Invalid version format.");
       }
-      _cachedVersion = version;
+
       return Result.Ok(version);
     }
     catch (Exception ex)

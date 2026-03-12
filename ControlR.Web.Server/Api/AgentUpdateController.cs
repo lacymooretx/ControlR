@@ -22,18 +22,18 @@ public class AgentUpdateController(
   [HttpGet("get-hash-sha256/{runtime}")]
   public async Task<ActionResult<string>> GetHash(RuntimeId runtime, CancellationToken cancellationToken)
   {
-    var filePath = AppConstants.GetAgentFileDownloadPath(runtime);
-    _logger.LogDebug("GetHash request started for downloads file. Path: {FilePath}", filePath);
+    var relativePath = AppConstants.GetAgentFileDownloadPath(runtime);
+    _logger.LogDebug("GetHash request started for downloads file. Path: {FilePath}", relativePath);
 
-    var fileInfo = _webHostEnvironment.WebRootFileProvider.GetFileInfo(filePath);
-    if (!fileInfo.Exists || fileInfo.PhysicalPath is null)
+    var physicalPath = Path.Combine(_webHostEnvironment.WebRootPath, relativePath.TrimStart('/'));
+    if (!System.IO.File.Exists(physicalPath))
     {
-      _logger.LogWarning("File does not exist: {FilePath}", filePath);
+      _logger.LogWarning("File does not exist: {FilePath}", physicalPath);
       return NotFound();
     }
 
     _logger.LogDebug("Calculating hash.");
-    await using var fs = new FileStream(fileInfo.PhysicalPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+    await using var fs = new FileStream(physicalPath, FileMode.Open, FileAccess.Read, FileShare.Read);
     var sha256Hash = await SHA256.HashDataAsync(fs, cancellationToken);
     var hexHash = Convert.ToHexString(sha256Hash);
 
