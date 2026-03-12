@@ -52,9 +52,9 @@ else
   app.UseHsts();
 }
 
-app.MapStaticAssets();
-
-// Serve agent download binaries (Linux/macOS agents have no file extension).
+// Serve agent download binaries from physical disk before MapStaticAssets.
+// MapStaticAssets uses a build-time manifest with stale file sizes; the
+// downloads volume is updated at runtime by pull-agents.sh.
 var downloadsPath = Path.Combine(builder.Environment.WebRootPath, "downloads");
 if (Directory.Exists(downloadsPath))
 {
@@ -66,6 +66,8 @@ if (Directory.Exists(downloadsPath))
     DefaultContentType = "application/octet-stream"
   });
 }
+
+app.MapStaticAssets();
 
 var novncContentTypeProvider = new FileExtensionContentTypeProvider();
 novncContentTypeProvider.Mappings[".cur"] = "image/x-icon";
