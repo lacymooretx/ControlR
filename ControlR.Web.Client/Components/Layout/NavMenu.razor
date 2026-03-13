@@ -1,4 +1,4 @@
-﻿@implements IDisposable
+@implements IDisposable
 
 @inject AuthenticationStateProvider AuthState
 @inject NavigationManager NavMan
@@ -43,82 +43,98 @@
   </MudNavLink>
 
   <AuthorizeView Roles="@($"{RoleNames.TenantAdministrator}")">
-    <div class="ms-2 mt-5">
-      <MudText Typo="Typo.caption" Color="Color.Default">
+    <div class="nav-section-label">
+      <MudText Typo="Typo.overline" Color="Color.Tertiary">
         Tenant Admin
       </MudText>
     </div>
-    <MudNavLink Href="@(ClientRoutes.ClientsManagement)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.People">
-      Client Management
-    </MudNavLink>
-    <MudNavLink Href="@(ClientRoutes.DeviceGroups)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.FolderSpecial">
-      Device Groups
-    </MudNavLink>
-    <MudNavLink Href="@(ClientRoutes.Permissions)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.SupervisedUserCircle">
-      Permissions
-    </MudNavLink>
-    <MudNavLink Href="@(ClientRoutes.Invite)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Email">
-      Invite
-    </MudNavLink>
-    <MudNavLink Href="@(ClientRoutes.TenantSettings)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings">
-      Tenant Settings
-    </MudNavLink>
-    <MudNavLink Href="@(ClientRoutes.Branding)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Palette">
-      Branding
-    </MudNavLink>
-    <MudNavLink Href="@(ClientRoutes.Scripts)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Code">
-      Scripts
-    </MudNavLink>
-    <MudNavLink Href="@(ClientRoutes.ScheduledTasks)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Schedule">
-      Scheduled Tasks
-    </MudNavLink>
-    <MudNavLink Href="@(ClientRoutes.Monitoring)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.MonitorHeart">
-      Monitoring
-    </MudNavLink>
-    <MudNavLink Href="@(ClientRoutes.AlertRules)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.NotificationsActive">
-      Alert Rules
-    </MudNavLink>
-    <MudNavLink Href="@(ClientRoutes.Suggestions)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.AutoAwesome">
-      Suggestions
-    </MudNavLink>
-    <MudNavLink Href="@(ClientRoutes.AssetManagement)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Inventory">
-      Asset Management
-    </MudNavLink>
-    <MudNavLink Href="@(ClientRoutes.PatchManagement)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.SystemUpdateAlt">
-      Patch Management
-    </MudNavLink>
-    <MudNavLink Href="@(ClientRoutes.AuditLog)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.History">
-      Audit Log
-    </MudNavLink>
-    <MudNavLink Href="@(ClientRoutes.Webhooks)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Webhook">
-      Webhooks
-    </MudNavLink>
-    <MudNavLink Href="@(ClientRoutes.SupportSessions)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Support">
-      Support Sessions
-    </MudNavLink>
-    <MudNavLink Href="@(ClientRoutes.SessionRecordings)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.VideoLibrary">
-      Session Recordings
-    </MudNavLink>
-    <MudNavLink Href="@(ClientRoutes.Toolbox)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.BuildCircle">
-      Toolbox
-    </MudNavLink>
-    <MudNavLink Href="@(ClientRoutes.Credentials)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.VpnKey">
-      Credential Vault
-    </MudNavLink>
-    <MudNavLink Href="@(ClientRoutes.Ticketing)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.ConfirmationNumber">
-      Ticketing
-    </MudNavLink>
-    <MudNavLink Href="@(ClientRoutes.JitAdmin)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.AdminPanelSettings">
-      JIT Admin
-    </MudNavLink>
-    <MudNavLink Href="@(ClientRoutes.Plugins)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Extension">
-      Plugins
-    </MudNavLink>
+
+    <MudNavGroup Title="Organization" Icon="@Icons.Material.Filled.Business" @bind-Expanded="_orgExpanded">
+      <MudNavLink Href="@(ClientRoutes.ClientsManagement)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.People">
+        Client Management
+      </MudNavLink>
+      <MudNavLink Href="@(ClientRoutes.DeviceGroups)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.FolderSpecial">
+        Device Groups
+      </MudNavLink>
+      <MudNavLink Href="@(ClientRoutes.Permissions)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.SupervisedUserCircle">
+        Permissions
+      </MudNavLink>
+      <MudNavLink Href="@(ClientRoutes.Invite)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Email">
+        Invite
+      </MudNavLink>
+      <MudNavLink Href="@(ClientRoutes.TenantSettings)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings">
+        Tenant Settings
+      </MudNavLink>
+      <MudNavLink Href="@(ClientRoutes.Branding)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Palette">
+        Branding
+      </MudNavLink>
+    </MudNavGroup>
+
+    <MudNavGroup Title="Automation" Icon="@Icons.Material.Filled.AutoMode" @bind-Expanded="_autoExpanded">
+      <MudNavLink Href="@(ClientRoutes.Scripts)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Code">
+        Scripts
+      </MudNavLink>
+      <MudNavLink Href="@(ClientRoutes.ScheduledTasks)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Schedule">
+        Scheduled Tasks
+      </MudNavLink>
+      <MudNavLink Href="@(ClientRoutes.Monitoring)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.MonitorHeart">
+        Monitoring
+      </MudNavLink>
+      <MudNavLink Href="@(ClientRoutes.AlertRules)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.NotificationsActive">
+        Alert Rules
+      </MudNavLink>
+      <MudNavLink Href="@(ClientRoutes.Suggestions)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.AutoAwesome">
+        Suggestions
+      </MudNavLink>
+    </MudNavGroup>
+
+    <MudNavGroup Title="Operations" Icon="@Icons.Material.Filled.Engineering" @bind-Expanded="_opsExpanded">
+      <MudNavLink Href="@(ClientRoutes.AssetManagement)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Inventory">
+        Asset Management
+      </MudNavLink>
+      <MudNavLink Href="@(ClientRoutes.PatchManagement)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.SystemUpdateAlt">
+        Patch Management
+      </MudNavLink>
+      <MudNavLink Href="@(ClientRoutes.Toolbox)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.BuildCircle">
+        Toolbox
+      </MudNavLink>
+      <MudNavLink Href="@(ClientRoutes.AuditLog)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.History">
+        Audit Log
+      </MudNavLink>
+      <MudNavLink Href="@(ClientRoutes.Webhooks)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Webhook">
+        Webhooks
+      </MudNavLink>
+    </MudNavGroup>
+
+    <MudNavGroup Title="Support" Icon="@Icons.Material.Filled.SupportAgent" @bind-Expanded="_supportExpanded">
+      <MudNavLink Href="@(ClientRoutes.SupportSessions)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Support">
+        Support Sessions
+      </MudNavLink>
+      <MudNavLink Href="@(ClientRoutes.SessionRecordings)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.VideoLibrary">
+        Session Recordings
+      </MudNavLink>
+      <MudNavLink Href="@(ClientRoutes.Ticketing)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.ConfirmationNumber">
+        Ticketing
+      </MudNavLink>
+    </MudNavGroup>
+
+    <MudNavGroup Title="Security" Icon="@Icons.Material.Filled.Security" @bind-Expanded="_secExpanded">
+      <MudNavLink Href="@(ClientRoutes.Credentials)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.VpnKey">
+        Credential Vault
+      </MudNavLink>
+      <MudNavLink Href="@(ClientRoutes.JitAdmin)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.AdminPanelSettings">
+        JIT Admin
+      </MudNavLink>
+      <MudNavLink Href="@(ClientRoutes.Plugins)" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Extension">
+        Plugins
+      </MudNavLink>
+    </MudNavGroup>
   </AuthorizeView>
+
   <AuthorizeView Roles="@(RoleNames.ServerAdministrator)">
     <Authorized>
-      <div class="ms-2 mt-5">
-        <MudText Typo="Typo.caption" Color="Color.Default">
+      <div class="nav-section-label">
+        <MudText Typo="Typo.overline" Color="Color.Tertiary">
           Server Admin
         </MudText>
       </div>
@@ -185,6 +201,13 @@
   </AuthorizeView>
 </MudNavMenu>
 
+<style>
+  .nav-section-label {
+    padding: 16px 16px 4px 16px;
+    letter-spacing: 0.1em;
+  }
+</style>
+
 @code {
 
   private string? _currentUrl;
@@ -192,6 +215,12 @@
   private bool _isPublicRegistrationEnabled;
   private TenantResponseDto[]? _tenants;
   private Guid? _selectedTenantId;
+
+  private bool _orgExpanded;
+  private bool _autoExpanded;
+  private bool _opsExpanded;
+  private bool _supportExpanded;
+  private bool _secExpanded;
 
   public void Dispose()
   {
@@ -204,7 +233,7 @@
     await base.OnInitializedAsync();
 
     _isPublicRegistrationEnabled = await PublicRegistingsProvider.GetIsPublicRegistrationEnabled();
-    
+
     var state = await AuthState.GetAuthenticationStateAsync();
     _isAuthenticated = state.User.IsAuthenticated();
 
@@ -238,7 +267,7 @@
     {
       return;
     }
-    
+
     var result = await ControlrApi.Value.LogOut();
     if (!result.IsSuccess) {
       Snackbar.Add("Logout failed", Severity.Error);
