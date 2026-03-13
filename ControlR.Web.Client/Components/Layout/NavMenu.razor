@@ -44,7 +44,7 @@
 
   <AuthorizeView Roles="@($"{RoleNames.TenantAdministrator}")">
     <div class="nav-section-label">
-      <MudText Typo="Typo.overline" Color="Color.Tertiary">
+      <MudText Typo="Typo.overline" Color="Color.Info">
         Tenant Admin
       </MudText>
     </div>
@@ -134,7 +134,7 @@
   <AuthorizeView Roles="@(RoleNames.ServerAdministrator)">
     <Authorized>
       <div class="nav-section-label">
-        <MudText Typo="Typo.overline" Color="Color.Tertiary">
+        <MudText Typo="Typo.overline" Color="Color.Info">
           Server Admin
         </MudText>
       </div>
