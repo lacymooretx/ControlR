@@ -24,13 +24,19 @@ public static class DeviceQueryExtensions
         continue;
       }
 
-      orderedQuery = sortDef.PropertyName switch
+      // Normalize "Dto.Name" → "Name" (MudDataGrid sends full property paths).
+      var sortProperty = sortDef.PropertyName.Contains('.')
+        ? sortDef.PropertyName[(sortDef.PropertyName.LastIndexOf('.') + 1)..]
+        : sortDef.PropertyName;
+
+      orderedQuery = sortProperty switch
       {
         nameof(Device.Name) => ApplySort(orderedQuery, query, d => d.Name, sortDef.Descending),
         nameof(Device.IsOnline) => ApplySort(orderedQuery, query, d => d.IsOnline, sortDef.Descending),
         nameof(Device.CpuUtilization) => ApplySort(orderedQuery, query, d => d.CpuUtilization, sortDef.Descending),
         nameof(Device.UsedMemoryPercent) => ApplySort(orderedQuery, query, d => d.UsedMemory / d.TotalMemory, sortDef.Descending),
         nameof(Device.UsedStoragePercent) => ApplySort(orderedQuery, query, d => d.UsedStorage / d.TotalStorage, sortDef.Descending),
+        "TenantName" => ApplySort(orderedQuery, query, d => d.Tenant!.Name, sortDef.Descending),
         _ => orderedQuery
       };
     }
@@ -56,7 +62,14 @@ public static class DeviceQueryExtensions
         logger.LogError("Invalid column filter definition: {@Filter}", filter);
         continue;
       }
-      switch (filter.PropertyName)
+
+      // MudDataGrid sends property names like "Dto.Name" from Property="x => x.Dto.Name".
+      // Normalize to just the property name.
+      var propertyName = filter.PropertyName.Contains('.')
+        ? filter.PropertyName[(filter.PropertyName.LastIndexOf('.') + 1)..]
+        : filter.PropertyName;
+
+      switch (propertyName)
       {
         case nameof(Device.Name):
           query = query.FilterByStringColumn(filter.Operator, filter.Value, d => d.Name, isRelationalDatabase, logger);
@@ -69,6 +82,9 @@ public static class DeviceQueryExtensions
           break;
         case nameof(Device.ConnectionId):
           query = query.FilterByStringColumn(filter.Operator, filter.Value, d => d.ConnectionId, isRelationalDatabase, logger);
+          break;
+        case "TenantName":
+          query = query.FilterByStringColumn(filter.Operator, filter.Value, d => d.Tenant!.Name, isRelationalDatabase, logger);
           break;
         case nameof(Device.IsOnline):
           query = query.FilterByBooleanColumn(filter.Operator, filter.Value, d => d.IsOnline, logger);
@@ -91,7 +107,7 @@ public static class DeviceQueryExtensions
             logger);
           break;
         default:
-          logger.LogError("Unhandled filter property: {PropertyName}", filter.PropertyName);
+          logger.LogError("Unhandled filter property: {PropertyName}", propertyName);
           break;
       }
     }

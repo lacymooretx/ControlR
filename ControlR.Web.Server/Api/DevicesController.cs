@@ -96,10 +96,7 @@ public class DevicesController : ControllerBase
     [FromServices] IAuthorizationService authorizationService,
     [FromRoute] Guid deviceId)
   {
-    var isServerAdmin = User.IsInRole(RoleNames.ServerAdministrator);
-    var devicesQuery = isServerAdmin
-      ? appDb.Devices.IgnoreQueryFilters()
-      : appDb.Devices;
+    var devicesQuery = GetDevicesQuery(appDb);
 
     var device = await devicesQuery.FirstOrDefaultAsync(x => x.Id == deviceId);
     if (device is null)
@@ -125,10 +122,7 @@ public class DevicesController : ControllerBase
     [FromServices] IAgentVersionProvider agentVersionProvider,
     [FromServices] IAuthorizationService authorizationService)
   {
-    var isServerAdmin = User.IsInRole(RoleNames.ServerAdministrator);
-    var devicesQuery = isServerAdmin
-      ? appDb.Devices.IgnoreQueryFilters()
-      : appDb.Devices;
+    var devicesQuery = GetDevicesQuery(appDb);
 
     var deviceStream = devicesQuery.Include(x => x.DeviceGroup).AsAsyncEnumerable();
 
@@ -152,10 +146,7 @@ public class DevicesController : ControllerBase
     [FromServices] IAgentVersionProvider agentVersionProvider,
     [FromRoute] Guid deviceId)
   {
-    var isServerAdmin = User.IsInRole(RoleNames.ServerAdministrator);
-    var devicesQuery = isServerAdmin
-      ? appDb.Devices.IgnoreQueryFilters()
-      : appDb.Devices;
+    var devicesQuery = GetDevicesQuery(appDb);
 
     var device = await devicesQuery.FirstOrDefaultAsync(x => x.Id == deviceId);
     if (device is null)
@@ -185,12 +176,8 @@ public class DevicesController : ControllerBase
     [FromServices] ILogger<DevicesController> logger)
   {
     var isRelationalDatabase = appDb.Database.IsRelational();
-    var isServerAdmin = User.IsInRole(RoleNames.ServerAdministrator);
 
-    // Start with all devices; ServerAdmin sees across all tenants
-    var devicesQuery = isServerAdmin
-      ? appDb.Devices.IgnoreQueryFilters()
-      : appDb.Devices;
+    var devicesQuery = GetDevicesQuery(appDb);
 
     var anyDevices = await devicesQuery.AnyAsync();
     var query = devicesQuery
@@ -257,6 +244,17 @@ public class DevicesController : ControllerBase
     };
 
     return response;
+  }
+
+  private IQueryable<Device> GetDevicesQuery(AppDb appDb)
+  {
+    var isServerAdmin = User.IsInRole(RoleNames.ServerAdministrator);
+    var hasTenantOverride = isServerAdmin &&
+      HttpContext.Request.Headers.ContainsKey("X-Tenant-Id");
+
+    return isServerAdmin && !hasTenantOverride
+      ? appDb.Devices.IgnoreQueryFilters()
+      : appDb.Devices;
   }
 
   private static async Task<bool> GetIsOutdated(Device entity, IAgentVersionProvider agentVersionProvider)
