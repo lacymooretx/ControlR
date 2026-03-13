@@ -1,5 +1,17 @@
 # ControlR Deployment Runlog
 
+## 2026-03-12: Fix Agent Download Timeout & Console.KeyAvailable Error
+
+### What was done
+1. **Increased DownloadsApi HttpClient timeout to 15 minutes** — Windows agent binary is ~147MB and couldn't download within the default 100-second HttpClient timeout on slower connections.
+2. **Fixed Console.KeyAvailable InvalidOperationException** — When the agent installer runs non-interactively (e.g., via a remote command or as a service), `Console.KeyAvailable` throws. Added guards using `Console.IsInputRedirected` and `Environment.UserInteractive`, plus a try/catch for edge cases.
+
+### Files Modified
+- `ControlR.Agent.Common/Startup/HostBuilderExtensions.cs` — Set `client.Timeout = TimeSpan.FromMinutes(15)` for DownloadsApi HttpClient
+- `ControlR.Agent/Startup/CommandProvider.cs` — Guard `WaitForKeyPress` and `WaitForShutdown` against non-interactive console scenarios
+
+---
+
 ## 2026-03-11: Standalone Camera Viewer on Device Overview Page
 
 ### What was done
@@ -38,9 +50,18 @@ Implemented a standalone webcam viewer on the device overview page that works wi
 - All projects build successfully with 0 errors
 - ControlR.Libraries.Shared, ControlR.Libraries.DevicesCommon, ControlR.Agent.Common, ControlR.DesktopClient.Common, ControlR.Agent, ControlR.Web.Server — all pass
 
-### Next Steps
-- [ ] Docker build and deploy to production
-- [ ] Test with a device that has a camera
+### Deployment
+- [x] Docker build and deploy to production (2026-03-11)
+- [x] Server-side deployed and working (DESKTOP-3E2A8N6 shows "Logitech BRIO")
+- [x] Camera page moved to standalone route `/device-access/camera` with nav link below VNC Relay
+- [x] Camera image set to full-width display
+
+### Agent Update
+- NIKKI-LAPTOP shows "No cameras detected" — FFmpeg confirmed installed (v8.0.1) but agent binary is old v1.0.0.0 without new hub methods
+- [x] Triggered GitHub Actions Build workflow (run 22975007834, v1.0.3.0) — 2026-03-11 21:19 UTC
+- [ ] Build completes successfully
+- [ ] Run `pull-agents.sh` on production to deploy new agent binaries
+- [ ] Agents auto-update (6-hour cycle) or manual trigger
 
 ---
 
@@ -1356,3 +1377,29 @@ Add drag-and-drop upload and file move capabilities to the file manager.
 - `ControlR.Web.Client/Components/Pages/DeviceAccess/FileSystem.razor.js`
 - `ControlR.Web.Client/Components/Pages/DeviceAccess/FileSystem.razor.css`
 - `Tests/ControlR.Agent.LoadTester/TestAgentHubClient.cs`
+
+## 2026-03-12: Fix Agent Binary Downloads + Deploy to Non-Windows Machines
+
+### Step 1: Fix extensionless binary download (HTTP 500)
+- **Goal**: ASP.NET's `MapStaticAssets()` returns 500 for files without recognized extensions (Linux/macOS agent binaries)
+- **Fix**: Added `UseStaticFiles` with `ServeUnknownFileTypes = true` for `/downloads` path in `Program.cs`
+- **Files changed**: `ControlR.Web.Server/Program.cs`
+- **Commit**: `6974c431` — "Serve extensionless agent binaries from /downloads path"
+
+### Step 2: Deploy to production
+- Pulled code on server, rebuilt Docker image, redeployed
+- Added persistent `controlr-downloads` volume in `docker-compose.yml` to survive container recreation
+- Downloaded macOS ARM64 and x64 agent artifacts from CI build #22979002238
+
+### Step 3: Deploy ControlR agent to non-Windows machines
+- **Computer 334 (lacy-winux)**: Linux x64 — installed and registered as Platform 2, online
+- **Computer 289 (Lacy's MacBook Pro M4)**: macOS ARM64 — installed and registered as "Lacys-MBP-M4-3", Platform 3, online
+- **Computer 380 (Randy's MacBook Air)**: Offline in Automate — skipped, will deploy when online
+
+### Step 4: Security
+- Temporarily enabled `AllowAgentsToSelfBootstrap` for agent registration
+- Disabled it after both agents registered
+
+### Infrastructure changes
+- Added `controlr-downloads` named volume to docker-compose.yml for persistent agent binary storage
+- macOS launchd service on MBP needed manual `launchctl load` (installer didn't auto-start it)

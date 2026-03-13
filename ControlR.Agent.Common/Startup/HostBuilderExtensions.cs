@@ -79,7 +79,11 @@ internal static class HostApplicationBuilderExtensions
       builder.Configuration.AddJsonFile(pathProvider.GetAgentAppSettingsPath(), true, true);
     }
 
-    services.AddHttpClient<IDownloadsApi, DownloadsApi>(ConfigureHttpClient);
+    services.AddHttpClient<IDownloadsApi, DownloadsApi>((provider, client) =>
+    {
+      ConfigureHttpClient(provider, client);
+      client.Timeout = TimeSpan.FromMinutes(15);
+    });
     services.AddHttpClient<IControlrApi, ControlrApi>(ConfigureHttpClient);
 
     services.AddSingleton<ISettingsProvider, SettingsProvider>();

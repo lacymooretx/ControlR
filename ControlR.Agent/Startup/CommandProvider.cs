@@ -198,21 +198,39 @@ internal static class CommandProvider
 
   private static async Task<bool> WaitForKeyPress(TimeSpan timeout)
   {
-    var sw = Stopwatch.StartNew();
-    while (sw.Elapsed < timeout)
+    if (Console.IsInputRedirected || !Environment.UserInteractive)
     {
-      if (Console.KeyAvailable)
-      {
-        _ = Console.ReadKey(intercept: true);
-        return true;
-      }
-      await Task.Delay(100);
+      return false;
     }
+
+    try
+    {
+      var sw = Stopwatch.StartNew();
+      while (sw.Elapsed < timeout)
+      {
+        if (Console.KeyAvailable)
+        {
+          _ = Console.ReadKey(intercept: true);
+          return true;
+        }
+        await Task.Delay(100);
+      }
+    }
+    catch (InvalidOperationException)
+    {
+      // No console available (e.g. running as a service or via remote command).
+    }
+
     return false;
   }
 
   private static async Task WaitForShutdown()
   {
+    if (Console.IsInputRedirected || !Environment.UserInteractive)
+    {
+      return;
+    }
+
     using var cts = new CancellationTokenSource();
     Console.CancelKeyPress += (sender, eventArgs) =>
     {
