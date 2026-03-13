@@ -265,7 +265,7 @@ internal class AgentInstallerWindows(
     controlrKey.SetValue("DisplayName", displayName);
     controlrKey.SetValue("DisplayVersion", version.FileVersion ?? "0.0.0");
     controlrKey.SetValue("InstallDate", DateTime.Now.ToString("yyyyMMdd"));
-    controlrKey.SetValue("Publisher", "Bitbound");
+    controlrKey.SetValue("Publisher", "Aspendora Technologies, LLC");
     controlrKey.SetValue("VersionMajor", $"{version.FileMajorPart}", RegistryValueKind.DWord);
     controlrKey.SetValue("VersionMinor", $"{version.FileMinorPart}", RegistryValueKind.DWord);
     controlrKey.SetValue("UninstallString", uninstallCommand);
